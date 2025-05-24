@@ -1,5 +1,9 @@
 pkgname=soon
+<<<<<<< HEAD
 pkgver=0.1.3
+=======
+pkgver=0.1.2
+>>>>>>> fc7b603 (feat:  Bump version to 0.1.2 in Cargo.toml, Cargo.lock, and PKGBUILD)
 pkgrel=1
 pkgdesc="🤖 Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 arch=('x86_64')
