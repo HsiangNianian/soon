@@ -1,5 +1,5 @@
 pkgname=soon
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="🤖 Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 arch=('x86_64')
