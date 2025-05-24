@@ -246,7 +246,11 @@ dependencies = [
 
 [[package]]
 name = "soon"
+<<<<<<< HEAD
 version = "0.1.3"
+=======
+version = "0.1.1"
+>>>>>>> 63967be (feat:  Bump version to 0.1.1 in Cargo.toml and Cargo.lock)
 dependencies = [
  "clap",
  "colored",
