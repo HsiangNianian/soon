@@ -3,7 +3,7 @@ requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "soon"
+name = "soon-bin"
 requires-python = ">=3.10"
 description = "Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 authors = [
