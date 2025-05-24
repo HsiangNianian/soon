@@ -39,7 +39,8 @@ jobs:
         run: |
           cd aur-repo
           cp ../PKGBUILD .
-          makepkg --printsrcinfo > .SRCINFO
+          cp ../.SRCINFO .
+          # makepkg --printsrcinfo > .SRCINFO
           git add PKGBUILD .SRCINFO
 
           if git diff --cached --quiet; then
