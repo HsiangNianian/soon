@@ -2,7 +2,10 @@
 name = "soon"
 version = "0.1.0"
 edition = "2021"
-
+description = "Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
+license = "MIT"
+repository = "https://github.com/HsiangNianian/soon"
+authors = ["HsiangNianian"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 # 生成 CLI 可执行文件

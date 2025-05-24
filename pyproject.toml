@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "soon"
 requires-python = ">=3.10"
-description = "A Rust CLI bundled as a Python package"
+description = "Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 authors = [
     { name = "HsiangNianian", email = "i@jyunko.cn" }
 ]
