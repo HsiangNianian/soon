@@ -1,0 +1,54 @@
+name: Publish to AUR
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aur:
+    name: Publish to AUR when tag starts with v
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up SSH for AUR
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Clone AUR repository
+        run: |
+          git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
+
+      - name: Update PKGBUILD and .SRCINFO in AUR repo
+        run: |
+          cd aur-repo
+          cp ../PKGBUILD .
+          makepkg --printsrcinfo > .SRCINFO
+          git add PKGBUILD .SRCINFO
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "release: ${{ github.ref_name }}"
+          git push origin master
