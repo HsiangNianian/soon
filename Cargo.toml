@@ -1,0 +1,16 @@
+[package]
+name = "soon"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# 生成 CLI 可执行文件
+[[bin]]
+name = "soon"  # CLI 名称与 Python 包名一致
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+colored = "3.0.0"
+counter = "0.6.0"
+dirs = "6.0.0"
