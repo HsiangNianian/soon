@@ -18,7 +18,6 @@
 ---
 
 MIT © 2025-PRESENT 简律纯.
-
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon?ref=badge_shield&issueType=security)
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon.svg?type=large&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon?ref=badge_large&issueType=license)
