@@ -175,3 +175,6 @@ cython_debug/
 
 # Cargo Lock
 Cargo.lock
+
+# aur package
+aur/
