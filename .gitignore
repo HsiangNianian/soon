@@ -177,4 +177,5 @@ cython_debug/
 Cargo.lock
 
 # aur package
-aur/
+.SRCINFO
+PKGBUILD
