@@ -47,7 +47,7 @@ wheels = [
 ]
 
 [[package]]
-name = "soon"
+name = "soon-bin"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },

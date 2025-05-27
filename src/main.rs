@@ -26,6 +26,10 @@ enum Commands {
     Learn,
     /// Display detected current shell
     Which,
+    /// Show version information
+    Version,
+    /// Update self [WIP]
+    Update,
 }
 
 fn detect_shell() -> String {
@@ -192,6 +196,13 @@ fn soon_which(shell: &str) {
     println!("{}", format!("🕵️ Current shell: {shell}").yellow().bold());
 }
 
+fn soon_version() {
+    println!("{}", format!("soon version {}", env!("CARGO_PKG_VERSION")).bold().cyan());
+}
+
+fn soon_update() {
+    println!("{}", "🔄 [soon update] feature under development...".yellow());
+}
 fn main() {
     let cli = Cli::parse();
     let shell = cli.shell.clone().unwrap_or_else(detect_shell);
@@ -206,6 +217,8 @@ fn main() {
         Some(Commands::Stats) => soon_stats(&shell),
         Some(Commands::Learn) => soon_learn(&shell),
         Some(Commands::Which) => soon_which(&shell),
+        Some(Commands::Version) => soon_version(),
+        Some(Commands::Update) => soon_update(),
         None => {
             soon_now(&shell);
         }
