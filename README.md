@@ -12,7 +12,7 @@
 
 - 🐚 Shell-aware (supports Bash, Zsh, Fish)
 - 📊 Shows your most used commands
-- 🌍 i18n support (EN/中文)
+- 🌍 i18n support (EN/中文) (WIP)
 - 💡 Designed for clarity — **not** an autocomplete tool, but a prediction assistant.
 
 ---
