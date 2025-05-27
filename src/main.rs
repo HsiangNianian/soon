@@ -1,14 +1,17 @@
 use clap::{Parser, Subcommand};
+use colored::*;
 use counter::Counter;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use colored::*;
 
 #[derive(Parser, Debug)]
-#[command(name = "soon", about = "Predict your next shell command based on history")]
+#[command(
+    name = "soon",
+    about = "Predict your next shell command based on history"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -109,57 +112,84 @@ fn load_history(shell: &str) -> Vec<HistoryItem> {
     } else {
         for line in reader.lines().flatten() {
             let line = if shell == "zsh" {
-                line.trim_start_matches(|c: char| c == ':' || c.is_digit(10) || c == ';').trim().to_string()
+                line.trim_start_matches(|c: char| c == ':' || c.is_digit(10) || c == ';')
+                    .trim()
+                    .to_string()
             } else {
                 line.trim().to_string()
             };
             if !line.is_empty() {
-                result.push(HistoryItem { cmd: line, path: None });
+                result.push(HistoryItem {
+                    cmd: line,
+                    path: None,
+                });
             }
         }
     }
     result
 }
 
-fn weighted_suggestions(history: &[HistoryItem], cwd: &str, shell: &str) -> Option<String> {
-    let dir_name = std::path::Path::new(cwd)
+fn predict_next_command(history: &[HistoryItem], cwd: &str) -> Option<String> {
+    let mut dir_cmds: HashMap<String, Vec<String>> = HashMap::new();
+    let mut last_dir: Option<String> = None;
+
+    for item in history {
+        let cmd = item.cmd.trim();
+        if let Some(rest) = cmd.strip_prefix("cd ") {
+            let dir = rest.trim().to_string();
+            last_dir = Some(dir);
+            continue;
+        }
+        if let Some(ref dir) = last_dir {
+            dir_cmds
+                .entry(dir.clone())
+                .or_default()
+                .push(cmd.to_string());
+            last_dir = None;
+        }
+    }
+
+    let cwd_name = std::path::Path::new(cwd)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("");
-    let mut scores: HashMap<&str, f64> = HashMap::new();
-    for (i, item) in history.iter().rev().enumerate() {
-        let mut score = 100.0 - i as f64 * 0.5;
 
-        if let Some(ref p) = item.path {
-            if p == cwd {
-                score *= 2.0;
-            }
+    if let Some(cmds) = dir_cmds.get(cwd_name) {
+        let mut counter = Counter::<&String, i32>::new();
+        for cmd in cmds {
+            counter.update([cmd]);
         }
-
-        if !cwd.is_empty() && item.cmd.contains(cwd) {
-            score *= 1.5;
+        if let Some((cmd, _)) = counter.most_common().into_iter().next() {
+            return Some(cmd.clone());
         }
-
-        if !dir_name.is_empty() && item.cmd.contains(dir_name) {
-            score *= 1.2;
-        }
-        if !shell.is_empty() && item.cmd.contains(shell) {
-            score *= 1.1;
-        }
-        *scores.entry(item.cmd.as_str()).or_insert(0.0) += score;
     }
-    scores.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).map(|(cmd, _)| cmd.to_string())
+
+    let mut counter = Counter::<&String, i32>::new();
+    for item in history {
+        let cmd = item.cmd.trim();
+        if !cmd.starts_with("cd ") {
+            counter.update([&item.cmd]);
+        }
+    }
+    counter
+        .most_common()
+        .into_iter()
+        .next()
+        .map(|(cmd, _)| cmd.clone())
 }
 
 fn soon_now(shell: &str) {
     let history = load_history(shell);
     if history.is_empty() {
-        eprintln!("{}", format!("⚠️ Failed to load history for {shell}.").red());
+        eprintln!(
+            "{}",
+            format!("⚠️ Failed to load history for {shell}.").red()
+        );
         std::process::exit(1);
     }
     let cwd = env::current_dir().unwrap_or_default();
     let cwd = cwd.to_string_lossy();
-    let suggestion = weighted_suggestions(&history, &cwd, shell);
+    let suggestion = predict_next_command(&history, &cwd);
     println!("\n{}", "🔮 You might run next:".magenta().bold());
     if let Some(cmd) = suggestion {
         println!("{} {}", "👉".green().bold(), cmd.green().bold());
@@ -171,7 +201,10 @@ fn soon_now(shell: &str) {
 fn soon_stats(shell: &str) {
     let history = load_history(shell);
     if history.is_empty() {
-        eprintln!("{}", format!("⚠️ Failed to load history for {shell}.").red());
+        eprintln!(
+            "{}",
+            format!("⚠️ Failed to load history for {shell}.").red()
+        );
         std::process::exit(1);
     }
     let mut counter = Counter::<&String, i32>::new();
@@ -182,14 +215,30 @@ fn soon_stats(shell: &str) {
     most_common.truncate(10);
 
     println!("{}", "📊 Top 10 most used commands".bold().cyan());
-    println!("{:<30}{}", "Command".cyan().bold(), "Usage Count".magenta().bold());
-    for (cmd, freq) in most_common {
-        println!("{:<30}{}", cmd, freq);
+    println!(
+        "{:<3} {:<40} {}",
+        "#".cyan().bold(),
+        "Command".cyan().bold(),
+        "Usage Count".magenta().bold()
+    );
+    for (i, (cmd, freq)) in most_common.iter().enumerate() {
+        let max_len = 38;
+        let display_cmd = if cmd.chars().count() > max_len {
+            let mut s = cmd.chars().take(max_len - 1).collect::<String>();
+            s.push('…');
+            s
+        } else {
+            cmd.to_string()
+        };
+        println!("{:<3} {:<40} {}", i + 1, display_cmd, freq);
     }
 }
 
 fn soon_learn(_shell: &str) {
-    println!("{}", "🧠 [soon learn] feature under development...".yellow());
+    println!(
+        "{}",
+        "🧠 [soon learn] feature under development...".yellow()
+    );
 }
 
 fn soon_which(shell: &str) {
@@ -197,11 +246,19 @@ fn soon_which(shell: &str) {
 }
 
 fn soon_version() {
-    println!("{}", format!("soon version {}", env!("CARGO_PKG_VERSION")).bold().cyan());
+    println!(
+        "{}",
+        format!("soon version {}", env!("CARGO_PKG_VERSION"))
+            .bold()
+            .cyan()
+    );
 }
 
 fn soon_update() {
-    println!("{}", "🔄 [soon update] feature under development...".yellow());
+    println!(
+        "{}",
+        "🔄 [soon update] feature under development...".yellow()
+    );
 }
 fn main() {
     let cli = Cli::parse();
