@@ -1,6 +1,6 @@
 [package]
 name = "soon"
-version = "0.1.5"
+version = "0.1.5-2"
 edition = "2021"
 description = "Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 license = "MIT"
