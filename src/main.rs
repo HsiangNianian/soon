@@ -10,7 +10,8 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "soon",
-    about = "Predict your next shell command based on history"
+    about = "Predict your next shell command based on history",
+    version
 )]
 struct Cli {
     #[command(subcommand)]
@@ -18,7 +19,9 @@ struct Cli {
     #[arg(long)]
     shell: Option<String>,
     #[arg(long, default_value_t = 3)]
-    ngram: usize, // 新增参数，控制n-gram长度
+    ngram: usize,
+    #[arg(long, help = "Enable debug output")]
+    debug: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -37,6 +40,8 @@ enum Commands {
     Update,
     /// Show cached main commands
     ShowCache,
+    /// Show internal cache commands
+    ShowInternalCache,
     /// Cache a command to soon cache (for testing)
     Cache {
         #[arg()]
@@ -45,32 +50,20 @@ enum Commands {
 }
 
 fn detect_shell() -> String {
-    if let Ok(shell) = env::var("SHELL") {
-        let shell = shell.to_lowercase();
-        if shell.contains("zsh") {
-            "zsh".to_string()
-        } else if shell.contains("bash") {
-            "bash".to_string()
-        } else if shell.contains("fish") {
-            "fish".to_string()
-        } else {
-            "unknown".to_string()
-        }
-    } else {
-        "unknown".to_string()
-    }
+    env::var("SHELL")
+        .ok()
+        .and_then(|s| std::path::Path::new(&s).file_name().map(|f| f.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn history_path(shell: &str) -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    match shell {
-        "bash" => Some(home.join(".bash_history")),
-        "zsh" => Some(home.join(".zsh_history")),
-        "fish" => Some(home.join(".local/share/fish/fish_history")),
-        _ => None,
-    }
+    dirs::home_dir().map(|home| match shell {
+        "bash" => home.join(".bash_history"),
+        "zsh" => home.join(".zsh_history"),
+        "fish" => home.join(".local/share/fish/fish_history"),
+        _ => PathBuf::new(),
+    })
 }
-
 #[derive(Debug)]
 struct HistoryItem {
     cmd: String,
@@ -82,187 +75,138 @@ fn load_history(shell: &str) -> Vec<HistoryItem> {
         Some(p) => p,
         None => return vec![],
     };
+
+    if !path.exists() {
+        eprintln!("⚠️ History file not found: {}", path.display());
+        return vec![];
+    }
+
     let file = match File::open(&path) {
         Ok(f) => f,
-        Err(_) => return vec![],
+        Err(e) => {
+            eprintln!("⚠️ Failed to open history file: {}", e);
+            return vec![];
+        }
     };
+
     let reader = BufReader::new(file);
-
     let mut result = Vec::new();
-    if shell == "fish" {
-        let mut last_cmd: Option<String> = None;
-        let mut last_path: Option<String> = None;
-        for line in reader.lines().flatten() {
-            if let Some(cmd) = line.strip_prefix("- cmd: ") {
-                last_cmd = Some(cmd.trim().to_string());
-                last_path = None;
-            } else if let Some(path) = line.strip_prefix("  path: ") {
-                last_path = Some(path.trim().to_string());
-            }
 
-            if let Some(cmd) = &last_cmd {
-                if line.starts_with("- cmd: ") || line.is_empty() {
-                    result.push(HistoryItem {
-                        cmd: cmd.clone(),
-                        path: last_path.clone(),
-                    });
-                    last_cmd = None;
-                    last_path = None;
-                }
-            }
-        }
-
-        if let Some(cmd) = last_cmd {
-            result.push(HistoryItem {
-                cmd,
-                path: last_path,
-            });
-        }
-    } else {
-        for line in reader.lines().flatten() {
-            let line = if shell == "zsh" {
-                line.trim_start_matches(|c: char| c == ':' || c.is_digit(10) || c == ';')
-                    .trim()
-                    .to_string()
-            } else {
-                line.trim().to_string()
-            };
-            if !line.is_empty() {
-                result.push(HistoryItem {
-                    cmd: line,
-                    path: None,
-                });
-            }
-        }
+    match shell {
+        "fish" => parse_fish_history(reader, &mut result),
+        "zsh" => parse_zsh_history(reader, &mut result),
+        _ => parse_default_history(reader, &mut result),
     }
+
+    // 过滤掉空命令
+    result.retain(|item| !item.cmd.trim().is_empty());
     result
 }
 
-// 提取主要指令
+fn parse_fish_history(reader: BufReader<File>, result: &mut Vec<HistoryItem>) {
+    let mut last_cmd: Option<String> = None;
+    let mut last_path: Option<String> = None;
+
+    for line in reader.lines().flatten() {
+        if let Some(cmd) = line.strip_prefix("- cmd: ") {
+            if let Some(prev_cmd) = last_cmd.take() {
+                result.push(HistoryItem {
+                    cmd: prev_cmd,
+                    path: last_path.take(),
+                });
+            }
+            last_cmd = Some(cmd.trim().to_string());
+        } else if let Some(path) = line.strip_prefix("  path: ") {
+            last_path = Some(path.trim().to_string());
+        } else if line.starts_with("  when:") {
+            // 处理when行时不操作
+        }
+    }
+
+    if let Some(cmd) = last_cmd {
+        result.push(HistoryItem {
+            cmd,
+            path: last_path,
+        });
+    }
+}
+
+fn parse_zsh_history(reader: BufReader<File>, result: &mut Vec<HistoryItem>) {
+    for line in reader.lines().flatten() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // 更健壮的zsh历史解析
+        let cmd = if let Some(semi) = line.find(';') {
+            let (_, rest) = line.split_at(semi + 1);
+            rest.trim()
+        } else {
+            line
+        };
+
+        if !cmd.is_empty() {
+            result.push(HistoryItem {
+                cmd: cmd.to_string(),
+                path: None,
+            });
+        }
+    }
+}
+
+fn parse_default_history(reader: BufReader<File>, result: &mut Vec<HistoryItem>) {
+    for line in reader.lines().flatten() {
+        let line = line.trim().to_string();
+        if !line.is_empty() {
+            result.push(HistoryItem {
+                cmd: line,
+                path: None,
+            });
+        }
+    }
+}
+
 fn main_cmd(cmd: &str) -> &str {
     cmd.split_whitespace().next().unwrap_or("")
 }
 
-// 读取 soon 缓存的最近 n 条主要指令
-fn read_soon_cache(n: usize) -> Vec<String> {
-    let path = dirs::home_dir().unwrap().join(".soon_cache");
-    let mut cmds: Vec<String> = std::fs::read_to_string(path)
-        .unwrap_or_default()
+fn get_cache_path() -> PathBuf {
+    dirs::home_dir().unwrap().join(".soon_cache")
+}
+
+fn read_soon_cache(ngram: usize) -> Vec<String> {
+    let path = get_cache_path();
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut cmds: Vec<String> = content
         .lines()
-        .map(|l| main_cmd(l).to_string())
+        .filter_map(|l| {
+            let cmd = main_cmd(l).to_string();
+            if cmd.is_empty() {
+                None
+            } else {
+                Some(cmd)
+            }
+        })
         .collect();
-    // 默认缓存条数为 10
-    let n = if n == 0 { 10 } else { n };
+
+    // 去重连续重复命令
+    cmds.dedup();
+
+    // 取最后ngram个命令
+    let n = ngram.max(1);
     if cmds.len() > n {
-        cmds = cmds[cmds.len()-n..].to_vec();
-    }
-    cmds
-}
-
-// 展示缓存的指令（应显示 history 中倒数 n 条主要指令）
-fn soon_show_cache(ngram: usize) {
-    let shell = detect_shell();
-    let history = load_history(&shell);
-    let history_main: Vec<String> = history.iter().map(|h| main_cmd(&h.cmd).to_string()).collect();
-    let n = if ngram == 0 { 10 } else { ngram };
-    let len = history_main.len();
-    let start = if len > n { len - n } else { 0 };
-    let cmds = &history_main[start..];
-
-    println!("{}", "🗂️  Cached main commands (from history):".cyan().bold());
-    if cmds.is_empty() {
-        println!("{}", "No cached commands.".yellow());
+        cmds[cmds.len() - n..].to_vec()
     } else {
-        for (i, cmd) in cmds.iter().enumerate() {
-            println!("{:>2}: {}", i + 1, cmd);
-        }
+        cmds
     }
 }
 
-// 写入 soon 缓存
-fn cache_main_cmd(cmd: &str) {
-    let path = dirs::home_dir().unwrap().join(".soon_cache");
-    let mut file = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(path)
-        .unwrap();
-    writeln!(file, "{}", main_cmd(cmd)).unwrap();
-}
-
-// n-gram 匹配预测（带相关度判定）
-fn predict_next_command(history: &[HistoryItem], ngram: usize) -> Option<String> {
-    let cache_cmds = read_soon_cache(ngram);
-    if cache_cmds.is_empty() { return None; }
-
-    let history_main: Vec<&str> = history.iter().map(|h| main_cmd(&h.cmd)).collect();
-    let mut best_score = 0.0;
-    let mut best_idx = None;
-    let mut scores = Vec::new();
-
-    for i in 0..=history_main.len().saturating_sub(cache_cmds.len()) {
-        let window = &history_main[i..i+cache_cmds.len()];
-        let matches = window.iter().zip(&cache_cmds).filter(|(a, b)| a == &b).count();
-        let score = matches as f64 / cache_cmds.len() as f64;
-        scores.push((i, score));
-        if score > best_score {
-            best_score = score;
-            best_idx = Some(i + cache_cmds.len());
-        }
-    }
-
-    // 找到所有相关度大于60%的，选择最大相关度的预测
-    let mut filtered: Vec<_> = scores.iter()
-        .filter(|(_, score)| *score >= 0.6)
-        .collect();
-    filtered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    if let Some(&(idx, score)) = filtered.first() {
-        let next_idx = idx + cache_cmds.len();
-        if next_idx < history_main.len() {
-            let next = history_main[next_idx];
-            if next != "soon" && !cache_cmds.contains(&next.to_string()) {
-                return Some(format!("{} (match: {:.0}%)", next, score * 100.0));
-            }
-        }
-    }
-
-    // 如果都小于60%，找最大相关度且>=40%
-    let mut filtered_40: Vec<_> = scores.iter()
-        .filter(|(_, score)| *score >= 0.4)
-        .collect();
-    filtered_40.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    if let Some(&(idx, score)) = filtered_40.first() {
-        let next_idx = idx + cache_cmds.len();
-        if next_idx < history_main.len() {
-            let next = history_main[next_idx];
-            if next != "soon" && !cache_cmds.contains(&next.to_string()) {
-                return Some(format!("{} (match: {:.0}%)", next, score * 100.0));
-            }
-        }
-    }
-
-    // 如果都小于10%，输出No suggestion
-    if best_score < 0.1 {
-        return None;
-    }
-
-    // 否则输出最接近40%的
-    let closest = scores.iter().min_by_key(|(_, score)| ((score - 0.4).abs() * 1000.0) as i32);
-    if let Some(&(idx, score)) = closest {
-        let next_idx = idx + cache_cmds.len();
-        if next_idx < history_main.len() {
-            let next = history_main[next_idx];
-            if next != "soon" && !cache_cmds.contains(&next.to_string()) {
-                return Some(format!("{} (match: {:.0}%)", next, score * 100.0));
-            }
-        }
-    }
-
-    None
-}
-
-fn soon_now(shell: &str, ngram: usize) {
+fn soon_show_cache(shell: &str, ngram: usize, debug: bool) {
     let history = load_history(shell);
     if history.is_empty() {
         eprintln!(
@@ -271,12 +215,225 @@ fn soon_now(shell: &str, ngram: usize) {
         );
         std::process::exit(1);
     }
-    let suggestion = predict_next_command(&history, ngram);
-    println!("\n{}", "🔮 You might run next:".magenta().bold());
-    if let Some(cmd) = suggestion {
-        println!("{} {}", "👉".green().bold(), cmd.green().bold());
+
+    // 从实际历史中获取主要命令
+    let mut main_cmds: Vec<String> = history
+        .iter()
+        .map(|h| main_cmd(&h.cmd).to_string())
+        .collect();
+
+    // 去重连续重复命令
+    main_cmds.dedup();
+
+    // 取最后ngram个命令
+    let n = ngram.max(1);
+    let cmds = if main_cmds.len() > n {
+        &main_cmds[main_cmds.len() - n..]
     } else {
-        println!("{}", "No suggestion found.".yellow());
+        &main_cmds
+    };
+
+    println!(
+        "{}",
+        "🗂️  Cached main commands (from history):".cyan().bold()
+    );
+    if cmds.is_empty() {
+        println!("{}", "  No cached commands".yellow());
+    } else {
+        for (i, cmd) in cmds.iter().enumerate() {
+            println!("  {:>2}: {}", i + 1, cmd);
+        }
+    }
+
+    if debug {
+        println!("\n{}", "ℹ️  Cache details:".dimmed());
+        println!("  Shell: {}", shell);
+        println!("  History file: {}", history_path(shell).unwrap().display());
+        println!("  Total history commands: {}", history.len());
+        println!("  Displayed commands: {}", cmds.len());
+    }
+}
+
+fn soon_show_internal_cache() {
+    let path = get_cache_path();
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => {
+            println!("No internal cache found");
+            return;
+        }
+    };
+
+    let cmds: Vec<&str> = content.lines().collect();
+
+    println!("{}", "🔧 Internal cache contents:".yellow().bold());
+    if cmds.is_empty() {
+        println!("{}", "  No commands in internal cache".yellow());
+    } else {
+        for (i, cmd) in cmds.iter().enumerate() {
+            println!("  {:>2}: {}", i + 1, cmd);
+        }
+    }
+
+    println!("\n{}: {}", "Cache path".dimmed(), path.display());
+}
+
+fn cache_main_cmd(cmd: &str) {
+    let cmd = main_cmd(cmd);
+    if cmd.is_empty() {
+        return;
+    }
+
+    let path = get_cache_path();
+    let mut file = match OpenOptions::new().append(true).create(true).open(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("⚠️ Failed to open cache file: {}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = writeln!(file, "{}", cmd) {
+        eprintln!("⚠️ Failed to write to cache: {}", e);
+    }
+}
+
+fn is_ignored_command(cmd: &str) -> bool {
+    let ignored = ["soon", "cd", "ls", "pwd", "exit", "clear"];
+    ignored.contains(&cmd)
+}
+
+fn predict_next_command(history: &[HistoryItem], ngram: usize, debug: bool) -> Option<String> {
+    let cache_cmds = read_soon_cache(ngram);
+
+    if debug {
+        println!("\n{}", "🐞 DEBUG MODE:".yellow().bold());
+        println!("  Cache commands: {:?}", cache_cmds);
+        println!("  History length: {}", history.len());
+        println!("  N-gram size: {}", ngram);
+    }
+
+    if cache_cmds.is_empty() {
+        if debug {
+            println!("  No cache commands for prediction");
+        }
+        return None;
+    }
+
+    let history_main: Vec<&str> = history.iter().map(|h| main_cmd(&h.cmd)).collect();
+
+    if history_main.is_empty() {
+        if debug {
+            println!("  No history commands for prediction");
+        }
+        return None;
+    }
+
+    let mut candidates: HashMap<&str, (f64, usize)> = HashMap::new();
+    let cache_len = cache_cmds.len();
+    let history_len = history_main.len();
+
+    if debug {
+        println!("  Scanning history for patterns...");
+    }
+
+    // 扫描历史记录，寻找匹配模式
+    for i in 0..history_len.saturating_sub(cache_len) {
+        let window = &history_main[i..i + cache_len];
+        let mut matches = 0;
+
+        for j in 0..cache_len {
+            if window[j] == cache_cmds[j] {
+                matches += 1;
+            }
+        }
+
+        let match_ratio = matches as f64 / cache_len as f64;
+        let position_weight = 1.0 - (i as f64 / history_len as f64) * 0.5; // 给近期匹配更高权重
+
+        if match_ratio >= 0.4 {
+            let next_idx = i + cache_len;
+            if next_idx < history_len {
+                let next_cmd = history_main[next_idx];
+
+                // 跳过忽略的命令和缓存中已有的命令
+                if !is_ignored_command(next_cmd) && !cache_cmds.contains(&next_cmd.to_string()) {
+                    let weighted_score = match_ratio * position_weight;
+                    let entry = candidates.entry(next_cmd).or_insert((0.0, 0));
+                    entry.0 += weighted_score;
+                    entry.1 += 1;
+
+                    if debug {
+                        println!(
+                            "  Found match at {}: ratio={:.2}, weight={:.2}, cmd={}",
+                            i, match_ratio, position_weight, next_cmd
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if candidates.is_empty() {
+        if debug {
+            println!("  No matching patterns found");
+        }
+        return None;
+    }
+
+    // 计算平均分数并选择最佳候选
+    let mut best_cmd = None;
+    let mut best_score = 0.0;
+
+    if debug {
+        println!("\n  Candidate commands:");
+    }
+
+    for (cmd, (total_score, count)) in &candidates {
+        let avg_score = total_score / *count as f64;
+
+        if debug {
+            println!(
+                "    {:<12} - score: {:.3} (appeared {} times)",
+                cmd, avg_score, count
+            );
+        }
+
+        if avg_score > best_score {
+            best_score = avg_score;
+            best_cmd = Some(*cmd);
+        }
+    }
+
+    best_cmd.map(|cmd| {
+        let confidence = (best_score * 100.0).min(99.0) as u8;
+        format!("{} ({}% confidence)", cmd, confidence)
+    })
+}
+
+fn soon_now(shell: &str, ngram: usize, debug: bool) {
+    let history = load_history(shell);
+    if history.is_empty() {
+        eprintln!(
+            "{}",
+            format!("⚠️ Failed to load history for {shell}.").red()
+        );
+        std::process::exit(1);
+    }
+
+    let suggestion = predict_next_command(&history, ngram, debug);
+
+    println!("\n{}", "🔮 You might run next:".magenta().bold());
+    match suggestion {
+        Some(cmd) => println!("{} {}", "👉".green().bold(), cmd.green().bold()),
+        None => println!("{}", "  No suggestion found".yellow()),
+    }
+
+    if debug {
+        println!("\n{}", "ℹ️  Prediction details:".dimmed());
+        println!("  Shell: {}", shell);
+        println!("  History commands: {}", history.len());
+        println!("  Last history command: {}", history.last().unwrap().cmd);
     }
 }
 
@@ -289,31 +446,36 @@ fn soon_stats(shell: &str) {
         );
         std::process::exit(1);
     }
-    let mut counter = Counter::<&String, i32>::new();
+
+    let mut counter = Counter::<String, usize>::new();
     for item in &history {
-        counter.update([&item.cmd]);
+        let cmd = main_cmd(&item.cmd).to_string();
+        if !cmd.is_empty() && !is_ignored_command(&cmd) {
+            counter[&cmd] += 1;
+        }
     }
-    let mut most_common: Vec<_> = counter.most_common().into_iter().collect();
+
+    let mut most_common: Vec<_> = counter.most_common();
+    most_common.sort_by(|a, b| b.1.cmp(&a.1));
     most_common.truncate(10);
 
-    println!("{}", "📊 Top 10 most used commands".bold().cyan());
+    println!("\n{}", "📊 Top 10 most used commands".bold().cyan());
     println!(
-        "{:<3} {:<40} {}",
+        "{:<4} {:<20} {}",
         "#".cyan().bold(),
         "Command".cyan().bold(),
-        "Usage Count".magenta().bold()
+        "Count".magenta().bold()
     );
-    for (i, (cmd, freq)) in most_common.iter().enumerate() {
-        let max_len = 38;
-        let display_cmd = if cmd.chars().count() > max_len {
-            let mut s = cmd.chars().take(max_len - 1).collect::<String>();
-            s.push('…');
-            s
-        } else {
-            cmd.to_string()
-        };
-        println!("{:<3} {:<40} {}", i + 1, display_cmd, freq);
+
+    for (i, (cmd, count)) in most_common.iter().enumerate() {
+        println!("{:<4} {:<20} {}", i + 1, cmd, count);
     }
+
+    println!(
+        "\n{} {}",
+        "ℹ️ Total commands processed:".dimmed(),
+        history.len()
+    );
 }
 
 fn soon_learn(_shell: &str) {
@@ -325,6 +487,9 @@ fn soon_learn(_shell: &str) {
 
 fn soon_which(shell: &str) {
     println!("{}", format!("🕵️ Current shell: {shell}").yellow().bold());
+    if let Some(path) = history_path(shell) {
+        println!("{} {}", "  History path:".dimmed(), path.display());
+    }
 }
 
 fn soon_version() {
@@ -358,16 +523,16 @@ fn main() {
     }
 
     match cli.command {
-        Some(Commands::Now) => soon_now(&shell, cli.ngram),
+        Some(Commands::Now) => soon_now(&shell, cli.ngram, cli.debug),
         Some(Commands::Stats) => soon_stats(&shell),
         Some(Commands::Learn) => soon_learn(&shell),
         Some(Commands::Which) => soon_which(&shell),
         Some(Commands::Version) => soon_version(),
         Some(Commands::Update) => soon_update(),
-        Some(Commands::ShowCache) => soon_show_cache(cli.ngram),
+        Some(Commands::ShowCache) => soon_show_cache(&shell, cli.ngram, cli.debug),
+        Some(Commands::ShowInternalCache) => soon_show_internal_cache(),
         Some(Commands::Cache { cmd }) => soon_cache(&cmd),
-        None => {
-            soon_now(&shell, cli.ngram);
-        }
+        None => soon_now(&shell, cli.ngram, cli.debug),
     }
 }
+
