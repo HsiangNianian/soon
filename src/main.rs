@@ -44,8 +44,8 @@ enum Commands {
     ShowInternalCache,
     /// Cache a command to soon cache (for testing)
     Cache {
-        #[arg()]
-        cmd: String,
+        #[arg(value_name = "NUM", help = "Number to cache")]
+        num: usize,
     },
 }
 
@@ -538,7 +538,7 @@ fn main() {
         Some(Commands::Update) => soon_update(),
         Some(Commands::ShowCache) => soon_show_cache(&shell, cli.ngram, cli.debug),
         Some(Commands::ShowInternalCache) => soon_show_internal_cache(),
-        Some(Commands::Cache { cmd }) => soon_cache(&shell, cli.ngram, &cmd),
+        Some(Commands::Cache { num}) => soon_cache(&shell, num, ""),
         None => soon_now(&shell, cli.ngram, cli.debug),
     }
 }
