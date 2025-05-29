@@ -1,6 +1,5 @@
 # Soon
 
-
 [![Publish to AUR](https://github.com/HsiangNianian/soon/actions/workflows/publish-aur.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-aur.yml)
 [![Publish to crates.io](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml)
 [![Publish to PyPI](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml)
@@ -14,6 +13,8 @@
 - 📊 Shows your most used commands
 - 🌍 i18n support (EN/中文) (WIP)
 - 💡 Designed for clarity — **not** an autocomplete tool, but a prediction assistant.
+
+![Soon](image/showcase.jpg)
 
 ## Install
 
