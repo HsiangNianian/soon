@@ -207,31 +207,8 @@ fn read_soon_cache(ngram: usize) -> Vec<String> {
 }
 
 fn soon_show_cache(shell: &str, ngram: usize, debug: bool) {
-    let history = load_history(shell);
-    if history.is_empty() {
-        eprintln!(
-            "{}",
-            format!("⚠️ Failed to load history for {shell}.").red()
-        );
-        std::process::exit(1);
-    }
-
-    // 从实际历史中获取主要命令
-    let mut main_cmds: Vec<String> = history
-        .iter()
-        .map(|h| main_cmd(&h.cmd).to_string())
-        .collect();
-
-    // 去重连续重复命令
-    main_cmds.dedup();
-
-    // 取最后ngram个命令
-    let n = ngram.max(1);
-    let cmds = if main_cmds.len() > n {
-        &main_cmds[main_cmds.len() - n..]
-    } else {
-        &main_cmds
-    };
+    overwrite_soon_cache_from_history(shell, ngram);
+    let cmds = read_soon_cache(ngram);
 
     println!(
         "{}",
@@ -248,8 +225,6 @@ fn soon_show_cache(shell: &str, ngram: usize, debug: bool) {
     if debug {
         println!("\n{}", "ℹ️  Cache details:".dimmed());
         println!("  Shell: {}", shell);
-        println!("  History file: {}", history_path(shell).unwrap().display());
-        println!("  Total history commands: {}", history.len());
         println!("  Displayed commands: {}", cmds.len());
     }
 }
@@ -411,7 +386,37 @@ fn predict_next_command(history: &[HistoryItem], ngram: usize, debug: bool) -> O
     })
 }
 
+fn overwrite_soon_cache_from_history(shell: &str, cache_size: usize) {
+    let history = load_history(shell);
+    let mut main_cmds: Vec<String> = history
+        .iter()
+        .map(|h| main_cmd(&h.cmd).to_string())
+        .collect();
+    main_cmds.dedup();
+    let n = cache_size.max(1);
+    let len = main_cmds.len();
+    let start = if len > n { len - n } else { 0 };
+    let latest_cmds = &main_cmds[start..];
+
+    let path = get_cache_path();
+    let mut file = match OpenOptions::new().write(true).truncate(true).create(true).open(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("⚠️ Failed to open cache file for overwrite: {}", e);
+            return;
+        }
+    };
+
+    for cmd in latest_cmds {
+        if let Err(e) = writeln!(file, "{}", cmd) {
+            eprintln!("⚠️ Failed to write to cache: {}", e);
+        }
+    }
+}
+
+// 修改 soon_now，每次调用都实时刷新 soon_cache
 fn soon_now(shell: &str, ngram: usize, debug: bool) {
+    overwrite_soon_cache_from_history(shell, ngram);
     let history = load_history(shell);
     if history.is_empty() {
         eprintln!(
@@ -435,6 +440,13 @@ fn soon_now(shell: &str, ngram: usize, debug: bool) {
         println!("  History commands: {}", history.len());
         println!("  Last history command: {}", history.last().unwrap().cmd);
     }
+}
+
+// 修改 soon_cache，每次调用都实时刷新 soon_cache
+fn soon_cache(shell: &str, ngram: usize, cmd: &str) {
+    overwrite_soon_cache_from_history(shell, ngram);
+    println!("Cached main commands refreshed from history.");
+    println!("(Tip: soon cache now always reflects the latest {ngram} main commands from your history.)");
 }
 
 fn soon_stats(shell: &str) {
@@ -508,11 +520,6 @@ fn soon_update() {
     );
 }
 
-fn soon_cache(cmd: &str) {
-    cache_main_cmd(cmd);
-    println!("Cached main command: {}", main_cmd(cmd));
-}
-
 fn main() {
     let cli = Cli::parse();
     let shell = cli.shell.clone().unwrap_or_else(detect_shell);
@@ -531,7 +538,7 @@ fn main() {
         Some(Commands::Update) => soon_update(),
         Some(Commands::ShowCache) => soon_show_cache(&shell, cli.ngram, cli.debug),
         Some(Commands::ShowInternalCache) => soon_show_internal_cache(),
-        Some(Commands::Cache { cmd }) => soon_cache(&cmd),
+        Some(Commands::Cache { cmd }) => soon_cache(&shell, cli.ngram, &cmd),
         None => soon_now(&shell, cli.ngram, cli.debug),
     }
 }
