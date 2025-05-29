@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "soon"
-version = "0.1.5-2"
+version = "0.1.6"
 dependencies = [
  "clap",
  "colored",
