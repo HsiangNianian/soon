@@ -15,6 +15,123 @@
 - 🌍 i18n support (EN/中文) (WIP)
 - 💡 Designed for clarity — **not** an autocomplete tool, but a prediction assistant.
 
+## Install
+
+1. Archlinux
+
+```shell
+paru -Sy soon
+```
+
+2. Cargo
+
+```shell
+cargo install soon
+```
+
+3. Python
+
+```
+pip install soon-bin
+```
+
+## Usage
+
+```shell
+»»»» soon help                                                                                                                                                                                      0|00:00:54
+Predict your next shell command based on history
+
+Usage: soon [OPTIONS] [COMMAND]
+
+Commands:
+  now                  Show the most likely next command
+  stats                Show most used commands
+  learn                Train prediction (WIP)
+  which                Display detected current shell
+  version              Show version information
+  update               Update self [WIP]
+  show-cache           Show cached main commands
+  show-internal-cache  Show internal cache commands
+  cache                Cache a command to soon cache (for testing)
+  help                 Print this message or the help of the given subcommand(s)
+
+Options:
+      --shell <SHELL>  
+      --ngram <NGRAM>  [default: 3]
+      --debug          Enable debug output
+  -h, --help           Print help
+  -V, --version        Print version
+```
+
+### Main Commands
+
+| Command               | Description                                      |
+|-----------------------|--------------------------------------------------|
+| `now`                 | Show the most likely next command                |
+| `stats`               | Show most used commands                          |
+| `learn`               | Train prediction (WIP)                           |
+| `which`               | Display detected current shell                   |
+| `version`             | Show version information                         |
+| `update`              | Update self (WIP)                                |
+| `show-cache`          | Show cached main commands                        |
+| `show-internal-cache` | Show internal cache commands                     |
+| `cache <NUM>`         | Set cache size to `<NUM>` and refresh cache      |
+| `help`                | Print this message or the help of subcommands    |
+
+### Options
+
+| Option           | Description                                 |
+|------------------|---------------------------------------------|
+| `--shell <SHELL>`| Specify shell type (bash, zsh, fish, etc.)  |
+| `--ngram <NGRAM>`| Set n-gram length for prediction (default: 3)|
+| `--debug`        | Enable debug output                         |
+| `-h, --help`     | Print help                                  |
+| `-V, --version`  | Print version                               |
+
+---
+
+### Examples
+
+#### Predict your next command (default ngram=3)
+```shell
+soon now
+```
+
+#### Show your most used commands
+```shell
+soon stats
+```
+
+#### Show cached main commands (default ngram=3)
+```shell
+soon show-cache
+```
+
+#### Show cached main commands with custom cache size (e.g., 10)
+```shell
+soon cache 10
+soon show-cache --ngram 10
+```
+
+#### Set shell type explicitly (if auto-detect fails)
+```shell
+soon now --shell zsh
+```
+
+#### Enable debug output
+```shell
+soon now --debug
+```
+
+---
+
+### How cache works
+
+- The `.soon_cache` file always contains the latest N main commands (N = cache size).
+- Every time you run `soon now`, `soon cache <NUM>`, or `soon show-cache`, the cache is refreshed from your shell history.
+- The cache size is controlled by the `<NUM>` argument in `soon cache <NUM>` or by `--ngram <NGRAM>` option.
+
+
 ---
 
 MIT © 2025-PRESENT 简律纯.
