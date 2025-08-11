@@ -98,7 +98,6 @@ fn load_history(shell: &str) -> Vec<HistoryItem> {
         _ => parse_default_history(reader, &mut result),
     }
 
-    // 过滤掉空命令
     result.retain(|item| !item.cmd.trim().is_empty());
     result
 }
@@ -118,8 +117,8 @@ fn parse_fish_history(reader: BufReader<File>, result: &mut Vec<HistoryItem>) {
             last_cmd = Some(cmd.trim().to_string());
         } else if let Some(path) = line.strip_prefix("  path: ") {
             last_path = Some(path.trim().to_string());
-        } else if line.starts_with("  when:") {
-            // 处理when行时不操作
+        } else if line.starts_with("  when:") {  
+            // TODO
         }
     }
 
@@ -138,7 +137,6 @@ fn parse_zsh_history(reader: BufReader<File>, result: &mut Vec<HistoryItem>) {
             continue;
         }
 
-        // 更健壮的zsh历史解析
         let cmd = if let Some(semi) = line.find(';') {
             let (_, rest) = line.split_at(semi + 1);
             rest.trim()
@@ -193,11 +191,9 @@ fn read_soon_cache(ngram: usize) -> Vec<String> {
             }
         })
         .collect();
-
-    // 去重连续重复命令
+ 
     cmds.dedup();
 
-    // 取最后ngram个命令
     let n = ngram.max(1);
     if cmds.len() > n {
         cmds[cmds.len() - n..].to_vec()
@@ -312,7 +308,6 @@ fn predict_next_command(history: &[HistoryItem], ngram: usize, debug: bool) -> O
         println!("  Scanning history for patterns...");
     }
 
-    // 扫描历史记录，寻找匹配模式
     for i in 0..history_len.saturating_sub(cache_len) {
         let window = &history_main[i..i + cache_len];
         let mut matches = 0;
@@ -324,14 +319,13 @@ fn predict_next_command(history: &[HistoryItem], ngram: usize, debug: bool) -> O
         }
 
         let match_ratio = matches as f64 / cache_len as f64;
-        let position_weight = 1.0 - (i as f64 / history_len as f64) * 0.5; // 给近期匹配更高权重
+        let position_weight = 1.0 - (i as f64 / history_len as f64) * 0.5;
 
         if match_ratio >= 0.4 {
             let next_idx = i + cache_len;
             if next_idx < history_len {
                 let next_cmd = history_main[next_idx];
 
-                // 跳过忽略的命令和缓存中已有的命令
                 if !is_ignored_command(next_cmd) && !cache_cmds.contains(&next_cmd.to_string()) {
                     let weighted_score = match_ratio * position_weight;
                     let entry = candidates.entry(next_cmd).or_insert((0.0, 0));
@@ -356,7 +350,6 @@ fn predict_next_command(history: &[HistoryItem], ngram: usize, debug: bool) -> O
         return None;
     }
 
-    // 计算平均分数并选择最佳候选
     let mut best_cmd = None;
     let mut best_score = 0.0;
 
@@ -414,7 +407,6 @@ fn overwrite_soon_cache_from_history(shell: &str, cache_size: usize) {
     }
 }
 
-// 修改 soon_now，每次调用都实时刷新 soon_cache
 fn soon_now(shell: &str, ngram: usize, debug: bool) {
     overwrite_soon_cache_from_history(shell, ngram);
     let history = load_history(shell);
@@ -442,7 +434,6 @@ fn soon_now(shell: &str, ngram: usize, debug: bool) {
     }
 }
 
-// 修改 soon_cache，每次调用都实时刷新 soon_cache
 fn soon_cache(shell: &str, ngram: usize, cmd: &str) {
     overwrite_soon_cache_from_history(shell, ngram);
     println!("Cached main commands refreshed from history.");
