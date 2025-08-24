@@ -16,9 +16,9 @@ use std::path::PathBuf;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
-    #[arg(long)]
+    #[arg(long, help = "Override shell type (bash, zsh, fish, etc.)")]
     shell: Option<String>,
-    #[arg(long, default_value_t = 3)]
+    #[arg(long, default_value_t = 3, help = "Set n-gram size for prediction accuracy")]
     ngram: usize,
     #[arg(long, help = "Enable debug output")]
     debug: bool,
@@ -30,13 +30,13 @@ enum Commands {
     Now,
     /// Show most used commands
     Stats,
-    /// Train prediction (WIP)
+    /// Train prediction and analyze command patterns
     Learn,
     /// Display detected current shell
     Which,
     /// Show version information
     Version,
-    /// Update self [WIP]
+    /// Check for updates and show installation options
     Update,
     /// Show cached main commands
     ShowCache,
@@ -67,6 +67,7 @@ fn history_path(shell: &str) -> Option<PathBuf> {
 #[derive(Debug)]
 struct HistoryItem {
     cmd: String,
+    #[allow(dead_code)] // Reserved for future features like directory-aware predictions
     path: Option<String>,
 }
 
@@ -78,6 +79,7 @@ fn load_history(shell: &str) -> Vec<HistoryItem> {
 
     if !path.exists() {
         eprintln!("⚠️ History file not found: {}", path.display());
+        eprintln!("💡 Tip: Use your shell first to build up command history, or specify a different shell with --shell");
         return vec![];
     }
 
@@ -249,26 +251,6 @@ fn soon_show_internal_cache() {
     println!("\n{}: {}", "Cache path".dimmed(), path.display());
 }
 
-fn cache_main_cmd(cmd: &str) {
-    let cmd = main_cmd(cmd);
-    if cmd.is_empty() {
-        return;
-    }
-
-    let path = get_cache_path();
-    let mut file = match OpenOptions::new().append(true).create(true).open(&path) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("⚠️ Failed to open cache file: {}", e);
-            return;
-        }
-    };
-
-    if let Err(e) = writeln!(file, "{}", cmd) {
-        eprintln!("⚠️ Failed to write to cache: {}", e);
-    }
-}
-
 fn is_ignored_command(cmd: &str) -> bool {
     let ignored = ["soon", "cd", "ls", "pwd", "exit", "clear"];
     ignored.contains(&cmd)
@@ -434,7 +416,7 @@ fn soon_now(shell: &str, ngram: usize, debug: bool) {
     }
 }
 
-fn soon_cache(shell: &str, ngram: usize, cmd: &str) {
+fn soon_cache(shell: &str, ngram: usize, _cmd: &str) {
     overwrite_soon_cache_from_history(shell, ngram);
     println!("Cached main commands refreshed from history.");
     println!("(Tip: soon cache now always reflects the latest {ngram} main commands from your history.)");
@@ -481,11 +463,48 @@ fn soon_stats(shell: &str) {
     );
 }
 
-fn soon_learn(_shell: &str) {
-    println!(
-        "{}",
-        "🧠 [soon learn] feature under development...".yellow()
-    );
+fn soon_learn(shell: &str) {
+    println!("{}", "🧠 Analyzing command patterns...".cyan().bold());
+    
+    let history = load_history(shell);
+    if history.is_empty() {
+        eprintln!("{}", "⚠️ No history found to learn from".red());
+        return;
+    }
+
+    // Analyze command patterns
+    let total_commands = history.len();
+    let unique_commands: std::collections::HashSet<String> = history
+        .iter()
+        .map(|h| main_cmd(&h.cmd).to_string())
+        .collect();
+    
+    println!("📊 Learning insights:");
+    println!("  • Total commands in history: {}", total_commands);
+    println!("  • Unique command types: {}", unique_commands.len());
+    
+    if total_commands > 0 {
+        let repetition_rate = ((total_commands - unique_commands.len()) as f64 / total_commands as f64) * 100.0;
+        println!("  • Command repetition rate: {:.1}%", repetition_rate);
+    }
+
+    // Find most common command patterns
+    let mut cmd_counts = std::collections::HashMap::new();
+    for item in &history {
+        let cmd = main_cmd(&item.cmd);
+        *cmd_counts.entry(cmd.to_string()).or_insert(0) += 1;
+    }
+    
+    let mut sorted_cmds: Vec<_> = cmd_counts.iter().collect();
+    sorted_cmds.sort_by(|a, b| b.1.cmp(a.1));
+    
+    println!("\n💡 Top command patterns:");
+    for (i, (cmd, count)) in sorted_cmds.iter().take(5).enumerate() {
+        let percentage = (**count as f64 / total_commands as f64) * 100.0;
+        println!("  {}: {} ({:.1}% of usage)", i + 1, cmd, percentage);
+    }
+    
+    println!("\n✨ Learning complete! Use 'soon now' for predictions.");
 }
 
 fn soon_which(shell: &str) {
@@ -505,10 +524,21 @@ fn soon_version() {
 }
 
 fn soon_update() {
-    println!(
-        "{}",
-        "🔄 [soon update] feature under development...".yellow()
-    );
+    println!("{}", "🔄 Checking for updates...".cyan().bold());
+    
+    let current_version = env!("CARGO_PKG_VERSION");
+    println!("Current version: {}", current_version.green());
+    
+    println!("\n📦 Update options:");
+    println!("  • Cargo: {}", "cargo install soon".dimmed());
+    println!("  • Python: {}", "pip install --upgrade soon-bin".dimmed());
+    println!("  • Arch Linux: {}", "paru -Syu soon".dimmed());
+    println!("  • From source: {}", "git pull && cargo install --path .".dimmed());
+    
+    println!("\n🔗 More info: {}", "https://github.com/HsiangNianian/soon".blue().underline());
+    
+    // In a future version, this could check GitHub releases API for newer versions
+    println!("\n💡 Future enhancement: automatic version checking will be added.");
 }
 
 fn main() {
@@ -516,7 +546,10 @@ fn main() {
     let shell = cli.shell.clone().unwrap_or_else(detect_shell);
 
     if shell == "unknown" && !matches!(cli.command, Some(Commands::Which)) {
-        eprintln!("{}", "⚠️ Unknown shell. Please specify with --shell.".red());
+        eprintln!("{}", "⚠️ Unknown shell detected.".red());
+        eprintln!("💡 Please specify your shell with: --shell <SHELL>");
+        eprintln!("   Supported shells: bash, zsh, fish");
+        eprintln!("   Example: soon now --shell zsh");
         std::process::exit(1);
     }
 

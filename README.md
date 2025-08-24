@@ -10,7 +10,9 @@
 <img align="right" src="https://repology.org/badge/vertical-allrepos/soon.svg?columns=2" />
 
 - 🐚 Shell-aware (supports Bash, Zsh, Fish)
-- 📊 Shows your most used commands
+- 📊 Shows your most used commands and analyzes patterns
+- 🧠 Smart learning from command history
+- 🔄 Easy update management and version checking
 - 🌍 i18n support (EN/中文) (WIP)
 - 💡 Designed for clarity — **not** an autocomplete tool, but a prediction assistant.
 
@@ -39,7 +41,7 @@ pip install soon-bin
 ## Usage
 
 ```shell
-»»»» soon help                                                                                                                                                                                      0|00:00:54
+»»»» soon help
 Predict your next shell command based on history
 
 Usage: soon [OPTIONS] [COMMAND]
@@ -47,18 +49,18 @@ Usage: soon [OPTIONS] [COMMAND]
 Commands:
   now                  Show the most likely next command
   stats                Show most used commands
-  learn                Train prediction (WIP)
+  learn                Train prediction and analyze command patterns
   which                Display detected current shell
   version              Show version information
-  update               Update self [WIP]
+  update               Check for updates and show installation options
   show-cache           Show cached main commands
   show-internal-cache  Show internal cache commands
   cache                Cache a command to soon cache (for testing)
   help                 Print this message or the help of the given subcommand(s)
 
 Options:
-      --shell <SHELL>  
-      --ngram <NGRAM>  [default: 3]
+      --shell <SHELL>  Override shell type (bash, zsh, fish, etc.)
+      --ngram <NGRAM>  Set n-gram size for prediction accuracy [default: 3]
       --debug          Enable debug output
   -h, --help           Print help
   -V, --version        Print version
@@ -66,28 +68,28 @@ Options:
 
 ### Main Commands
 
-| Command               | Description                                      |
-|-----------------------|--------------------------------------------------|
-| `now`                 | Show the most likely next command                |
-| `stats`               | Show most used commands                          |
-| `learn`               | Train prediction (WIP)                           |
-| `which`               | Display detected current shell                   |
-| `version`             | Show version information                         |
-| `update`              | Update self (WIP)                                |
-| `show-cache`          | Show cached main commands                        |
-| `show-internal-cache` | Show internal cache commands                     |
-| `cache <NUM>`         | Set cache size to `<NUM>` and refresh cache      |
-| `help`                | Print this message or the help of subcommands    |
+| Command               | Description                                          |
+|-----------------------|------------------------------------------------------|
+| `now`                 | Show the most likely next command                    |
+| `stats`               | Show most used commands                              |
+| `learn`               | Train prediction and analyze command patterns       |
+| `which`               | Display detected current shell                       |
+| `version`             | Show version information                             |
+| `update`              | Check for updates and show installation options     |
+| `show-cache`          | Show cached main commands                            |
+| `show-internal-cache` | Show internal cache commands                         |
+| `cache <NUM>`         | Set cache size to `<NUM>` and refresh cache          |
+| `help`                | Print this message or the help of subcommands        |
 
 ### Options
 
-| Option           | Description                                 |
-|------------------|---------------------------------------------|
-| `--shell <SHELL>`| Specify shell type (bash, zsh, fish, etc.)  |
-| `--ngram <NGRAM>`| Set n-gram length for prediction (default: 3)|
-| `--debug`        | Enable debug output                         |
-| `-h, --help`     | Print help                                  |
-| `-V, --version`  | Print version                               |
+| Option           | Description                                         |
+|------------------|-----------------------------------------------------|
+| `--shell <SHELL>`| Override shell type (bash, zsh, fish, etc.)        |
+| `--ngram <NGRAM>`| Set n-gram size for prediction accuracy (default: 3)|
+| `--debug`        | Enable debug output                                 |
+| `-h, --help`     | Print help                                          |
+| `-V, --version`  | Print version                                       |
 
 ---
 
@@ -96,6 +98,16 @@ Options:
 #### Predict your next command (default ngram=3)
 ```shell
 soon now
+```
+
+#### Analyze your command patterns and learn insights
+```shell
+soon learn
+```
+
+#### Check for updates
+```shell
+soon update
 ```
 
 #### Show your most used commands

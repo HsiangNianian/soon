@@ -1,6 +1,6 @@
 [package]
 name = "soon"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 description = "Predict your next shell command based on history — like shell autocomplete, but MORE stupid"
 license = "MIT"
@@ -13,7 +13,7 @@ name = "soon"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 colored = "3.0.0"
-counter = "0.6.0"
+counter = "0.7.0"
 dirs = "6.0.0"
