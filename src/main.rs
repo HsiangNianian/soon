@@ -567,3 +567,71 @@ fn main() {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_main_cmd_extraction() {
+        assert_eq!(main_cmd("git status"), "git");
+        assert_eq!(main_cmd("ls -la"), "ls");
+        assert_eq!(main_cmd(""), "");
+        assert_eq!(main_cmd("single"), "single");
+        assert_eq!(main_cmd("  spaced  command  "), "spaced");
+    }
+
+    #[test]
+    fn test_is_ignored_command() {
+        assert_eq!(is_ignored_command("soon"), true);
+        assert_eq!(is_ignored_command("cd"), true);
+        assert_eq!(is_ignored_command("ls"), true);
+        assert_eq!(is_ignored_command("pwd"), true);
+        assert_eq!(is_ignored_command("exit"), true);
+        assert_eq!(is_ignored_command("clear"), true);
+        assert_eq!(is_ignored_command("git"), false);
+        assert_eq!(is_ignored_command("cargo"), false);
+    }
+
+    #[test]
+    fn test_detect_shell() {
+        // This test will depend on the actual environment
+        let shell = detect_shell();
+        assert!(shell == "bash" || shell == "zsh" || shell == "fish" || shell == "unknown");
+    }
+
+    #[test]
+    fn test_history_path() {
+        let bash_path = history_path("bash");
+        assert!(bash_path.is_some());
+        assert!(bash_path.unwrap().ends_with(".bash_history"));
+
+        let zsh_path = history_path("zsh");
+        assert!(zsh_path.is_some());
+        assert!(zsh_path.unwrap().ends_with(".zsh_history"));
+
+        let fish_path = history_path("fish");
+        assert!(fish_path.is_some());
+        assert!(fish_path.unwrap().ends_with("fish_history"));
+
+        let unknown_path = history_path("unknown");
+        assert!(unknown_path.is_some());
+        // Unknown shell returns empty PathBuf
+    }
+
+    #[test]
+    fn test_get_cache_path() {
+        let cache_path = get_cache_path();
+        assert!(cache_path.ends_with(".soon_cache"));
+    }
+
+    #[test]
+    fn test_history_item_creation() {
+        let item = HistoryItem {
+            cmd: "test command".to_string(),
+            path: Some("/home/user".to_string()),
+        };
+        assert_eq!(item.cmd, "test command");
+        assert_eq!(item.path, Some("/home/user".to_string()));
+    }
+}
+
