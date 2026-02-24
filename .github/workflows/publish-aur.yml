@@ -33,6 +33,16 @@
            with:
              fetch-depth: 0
 
+         - name: Debug workspace
+           run: |
+             echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+             ls -al $GITHUB_WORKSPACE
+
+         - name: Set git user
+           run: |
+             git config --global user.name "github-actions[bot]"
+             git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
          - name: Prepare PKGBUILD and .SRCINFO
            run: |
              cd $GITHUB_WORKSPACE
@@ -45,17 +55,15 @@
              sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
              makepkg --printsrcinfo > .SRCINFO
 
-         - name: Set git user
-           run: |
-             git config --global user.name "github-actions[bot]"
-             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-             
          - name: Push to AUR
            run: |
+             cd $GITHUB_WORKSPACE
              rm -rf pkg src
              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
-             cp PKGBUILD .SRCINFO aur-push/ 2>/dev/null || true
+             cp PKGBUILD .SRCINFO README* LICENSE* aur-push/ 2>/dev/null || true
              cd aur-push
-             git add PKGBUILD .SRCINFO 2>/dev/null || true
+             git config user.name "github-actions[bot]"
+             git config user.email "github-actions[bot]@users.noreply.github.com"
+             git add PKGBUILD .SRCINFO README* LICENSE* 2>/dev/null || true
              git commit -m "release: $VERSION" || echo "Nothing to commit"
              git push
