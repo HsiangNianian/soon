@@ -19,8 +19,8 @@
          image: archlinux:latest
        steps:
          - name: Install dependencies
-           run: pacman -Sy --noconfirm git openssh base-devel
-   
+           run: pacman -Sy --noconfirm git openssh base-devel aurpublish
+
          - name: Set up SSH for AUR
            run: |
              mkdir -p ~/.ssh
@@ -35,13 +35,9 @@
              git config --global user.name "github-actions[bot]"
              git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-         - name: Clone AUR repo
-           run: |
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
-
          - name: Update PKGBUILD and .SRCINFO
            run: |
-             cd aur-push
+             cd $GITHUB_WORKSPACE
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
@@ -50,6 +46,8 @@
              VERSION="${TAG#v}"
              sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
              makepkg --printsrcinfo > .SRCINFO
-             git add PKGBUILD .SRCINFO
-             git commit -m "release: $VERSION" || echo "Nothing to commit"
-             git push
+
+         - name: Publish to AUR with aurpublish
+           run: |
+             cd $GITHUB_WORKSPACE
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" aurpublish soon
