@@ -34,9 +34,6 @@ jobs:
              chmod 600 ~/.ssh/id_ed25519
              ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
 
-         - name: Install makepkg
-           run: sudo apt-get update && sudo apt-get install -y makepkg archlinux-keyring
-
          - name: Clone AUR repository and update PKGBUILD
            run: |
              git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
