@@ -39,15 +39,12 @@ jobs:
          - name: Add AUR host to known_hosts
            run: ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
 
-         - name: Debug SSH setup
-           run: |
-             ls -l ~/.ssh
-             cat ~/.ssh/id_ed25519
-             cat ~/.ssh/known_hosts
+         - name: Set SSH permissions for current user
+           run: chown $(id -u):$(id -g) ~/.ssh/id_ed25519 ~/.ssh/known_hosts
      
-         - name: Clone AUR repository and update PKGBUILD
+         - name: Clone AUR repository
            run: |
-             git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
              cd aur-repo
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.tag }}" != "" ];
              then
