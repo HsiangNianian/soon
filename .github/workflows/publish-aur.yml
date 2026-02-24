@@ -1,3 +1,4 @@
+
    name: Publish to AUR
 
    on:
@@ -28,24 +29,18 @@
              chmod 700 ~/.ssh
              ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
 
-         - name: Checkout repository
-           uses: actions/checkout@v4
-           with:
-             fetch-depth: 0
-
-         - name: Debug workspace
-           run: |
-             echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-             ls -al $GITHUB_WORKSPACE
-
          - name: Set git user
            run: |
              git config --global user.name "github-actions[bot]"
              git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-         - name: Prepare PKGBUILD and .SRCINFO
+         - name: Clone AUR repo
            run: |
-             cd $GITHUB_WORKSPACE/aur
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
+
+         - name: Update PKGBUILD and .SRCINFO
+           run: |
+             cd aur-push
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
@@ -54,16 +49,6 @@
              VERSION="${TAG#v}"
              sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
              makepkg --printsrcinfo > .SRCINFO
-
-         - name: Push to AUR
-           run: |
-             cd $GITHUB_WORKSPACE/aur
-             rm -rf pkg src
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
-             cp PKGBUILD .SRCINFO README* LICENSE* aur-push/ 2>/dev/null || true
-             cd aur-push
-             git config user.name "github-actions[bot]"
-             git config user.email "github-actions[bot]@users.noreply.github.com"
-             git add PKGBUILD .SRCINFO README* LICENSE* 2>/dev/null || true
+             git add PKGBUILD .SRCINFO
              git commit -m "release: $VERSION" || echo "Nothing to commit"
              git push
