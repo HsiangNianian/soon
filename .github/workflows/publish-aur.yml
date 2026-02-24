@@ -38,6 +38,12 @@ jobs:
      
          - name: Add AUR host to known_hosts
            run: ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+
+         - name: Debug SSH setup
+           run: |
+             ls -l ~/.ssh
+             cat ~/.ssh/id_ed25519
+             cat ~/.ssh/known_hosts
      
          - name: Clone AUR repository and update PKGBUILD
            run: |
