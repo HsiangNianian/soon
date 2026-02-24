@@ -20,7 +20,7 @@
        steps:
          - name: Install dependencies
            run: pacman -Sy --noconfirm git openssh base-devel
-
+   
          - name: Set up SSH for AUR
            run: |
              mkdir -p ~/.ssh
@@ -28,6 +28,7 @@
              chmod 600 ~/.ssh/id_ed25519
              chmod 700 ~/.ssh
              ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+             chmod 644 ~/.ssh/known_hosts
 
          - name: Set git user
            run: |
