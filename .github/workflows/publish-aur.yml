@@ -45,7 +45,7 @@
 
          - name: Prepare PKGBUILD and .SRCINFO
            run: |
-             cd $GITHUB_WORKSPACE
+             cd $GITHUB_WORKSPACE/aur
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
@@ -57,7 +57,7 @@
 
          - name: Push to AUR
            run: |
-             cd $GITHUB_WORKSPACE
+             cd $GITHUB_WORKSPACE/aur
              rm -rf pkg src
              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
              cp PKGBUILD .SRCINFO README* LICENSE* aur-push/ 2>/dev/null || true
