@@ -1,55 +1,35 @@
 name: Publish to AUR
+
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
-      - '*'
-  pull_request:
-  workflow_dispatch:
-
-permissions:
-  contents: read
+      - 'v*'
 
 jobs:
-  aur:
-    name: Publish to AUR when tag starts with v
+  publish-aur:
+    name: Publish to AUR
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update PKGBUILD version
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=$/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
-          fetch-depth: 0
-
-      - name: Set up SSH for AUR
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
-
-      - name: Clone AUR repository
-        run: |
-          git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
-
-      - name: Update PKGBUILD and .SRCINFO in AUR repo
-        run: |
-          cd aur-repo
-          cp ../PKGBUILD .
-          cp ../.SRCINFO .
-          # makepkg --printsrcinfo > .SRCINFO
-          git add PKGBUILD .SRCINFO
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git commit -m "release: ${{ github.ref_name }}"
-          git push origin master
+          pkgname: soon
+          pkgbuild: ./PKGBUILD
+          updpkgsums: true
+          commit_username: ${AUR_USERNAME}
+          commit_email: ${AUR_EMAIL}
+          ssh_private_key: ${AUR_SSH_PRIVATE_KEY}
+          commit_message: "Update to version $"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
