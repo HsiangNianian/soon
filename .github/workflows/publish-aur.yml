@@ -38,6 +38,12 @@
          - name: Clone AUR repo
            run: |
              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
+   
+         - name: Debug SSH files
+           run: |
+             ls -l ~/.ssh
+             cat ~/.ssh/known_hosts
+             cat ~/.ssh/id_ed25519
 
          - name: Update PKGBUILD and .SRCINFO
            run: |
