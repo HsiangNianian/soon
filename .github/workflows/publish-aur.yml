@@ -1,56 +1,56 @@
 name: Publish to AUR
 on:
-  push:
-    branches:
-      - main
-      - master
-    tags:
-      - '*'
-  pull_request:
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
+     push:
+       branches:
+         - main
+         - master
+       tags:
+         - 'v*'
+     workflow_dispatch:
+       inputs:
+         tag:
+           description: 'Tag (v开头)'
+           required: false
+           type: string
+           
 jobs:
-  aur:
-    name: Publish to AUR when tag starts with v
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+     aur:
+       runs-on: ubuntu-latest
+       if: |
+         github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' ||
+         startsWith(github.ref, 'refs/tags/v')
+       steps:
+         - name: Checkout repository
+           uses: actions/checkout@v4
+           with:
+             fetch-depth: 0
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+         - name: Set up SSH for AUR
+           run: |
+             mkdir -p ~/.ssh
+             echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+             chmod 600 ~/.ssh/id_ed25519
+             ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
 
-      - name: Set up SSH for AUR
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
-
-      - name: Clone AUR repository
-        run: |
-          git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
-          cd aur-repo
-          
-          TAG=${GITHUB_REF##*/}
-          VERSION=${TAG#v}
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-          
-          makepkg --printsrcinfo > .SRCINFO
-          
-          git add PKGBUILD .SRCINFO
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git commit -m "release: ${{ github.ref_name }}"
-          git push origin master
+         - name: Clone AUR repository and update PKGBUILD
+           run: |
+             git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
+             cd aur-repo
+             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.tag }}" != "" ];
+             then
+               TAG="${{ github.event.inputs.tag }}"
+             else
+               TAG="${GITHUB_REF##*/}"
+             fi
+             VERSION="${TAG#v}"
+             sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+             makepkg --printsrcinfo > .SRCINFO
+             git add PKGBUILD .SRCINFO
+             if git diff --cached --quiet; then
+               echo "No changes to commit"
+               exit 0
+             fi
+             git config user.name "github-actions[bot]"
+             git config user.email "github-actions[bot]@users.noreply.github.com"
+             git commit -m "release: $TAG"
+             git push origin master
