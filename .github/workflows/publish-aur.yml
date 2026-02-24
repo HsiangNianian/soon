@@ -32,7 +32,13 @@ jobs:
              mkdir -p ~/.ssh
              echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
              chmod 600 ~/.ssh/id_ed25519
-             
+     
+         - name: Install dependencies
+           run: pacman -Sy --noconfirm git openssh base-devel
+     
+         - name: Add AUR host to known_hosts
+           run: ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+     
          - name: Clone AUR repository and update PKGBUILD
            run: |
              git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
