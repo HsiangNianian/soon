@@ -1,6 +1,6 @@
-name: Publish to AUR
+   name: Publish to AUR
 
-on:
+   on:
      push:
        tags:
          - 'v*'
@@ -11,7 +11,7 @@ on:
            required: false
            type: string
 
-jobs:
+   jobs:
      aur:
        runs-on: ubuntu-latest
        container:
@@ -19,10 +19,9 @@ jobs:
        steps:
          - name: Install dependencies
            run: |
-             pacman -Sy --noconfirm git openssh base-devel aurpublish sudo
-             # 创建 builder 用户
+             # 只需要 git, openssh, base-devel, sudo，不再需要 aurpublish
+             pacman -Sy --noconfirm git openssh base-devel sudo
              useradd -m builder
-             # 允许 builder 无密码 sudo
              echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
          - name: Set up SSH for AUR
@@ -31,16 +30,12 @@ jobs:
              echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > /home/builder/.ssh/id_ed25519
              chmod 600 /home/builder/.ssh/id_ed25519
              chmod 700 /home/builder/.ssh
-
-             # 扫描 host key
              ssh-keyscan -t ed25519 aur.archlinux.org >> /home/builder/.ssh/known_hosts || true
              chmod 644 /home/builder/.ssh/known_hosts
-
              chown -R builder:builder /home/builder/.ssh
 
          - name: Clone AUR repo
            run: |
-             # 使用 sudo -u builder <<EOF 方式避免引号噩梦
              sudo -u builder bash <<EOF
                export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no"
                git clone ssh://aur@aur.archlinux.org/soon.git /home/builder/aur-push
@@ -52,7 +47,7 @@ jobs:
              sudo -u builder git config --global user.email "github-actions[bot]@users.noreply.github.com"
              sudo -u builder git config --global --add safe.directory /home/builder/aur-push
 
-         - name: Update PKGBUILD and .SRCINFO
+         - name: Update PKGBUILD and Push
            run: |
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
@@ -62,24 +57,23 @@ jobs:
              VERSION="${TAG#v}"
              echo "Updating to version: $VERSION"
 
-             # 使用 EOF 块，清晰且安全
-             sudo -u builder bash <<EOF
-               cd /home/builder/aur-push
-               sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-               makepkg --printsrcinfo > .SRCINFO
-
-               git add PKGBUILD .SRCINFO
-               if ! git diff --cached --quiet; then
-                 git commit -m "release: $VERSION"
-               else
-                 echo "No changes to commit"
-               fi
-             EOF
-
-         - name: Publish to AUR with aurpublish
-           run: |
              sudo -u builder bash <<EOF
                cd /home/builder/aur-push
                export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no"
-               aurpublish soon
+
+               # 修改版本号
+               sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+
+               # 生成 .SRCINFO
+               makepkg --printsrcinfo > .SRCINFO
+
+               git add PKGBUILD .SRCINFO
+
+               if ! git diff --cached --quiet; then
+                 git commit -m "release: $VERSION"
+                 # 直接 git push，简单粗暴有效
+                 git push origin master
+               else
+                 echo "No changes to commit"
+               fi
              EOF
