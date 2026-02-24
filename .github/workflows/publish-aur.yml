@@ -35,8 +35,13 @@ jobs:
         run: |
           git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
           cd aur-repo
-          cp ../PKGBUILD .
+          
+          TAG=${GITHUB_REF##*/}
+          VERSION=${TAG#v}
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          
           makepkg --printsrcinfo > .SRCINFO
+          
           git add PKGBUILD .SRCINFO
 
           if git diff --cached --quiet; then
