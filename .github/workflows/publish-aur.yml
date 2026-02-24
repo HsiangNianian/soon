@@ -33,7 +33,7 @@ jobs:
              ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
 
          - name: Install makepkg
-           run: sudo apt-get update && sudo apt-get install -y makepkg archlinux-keyring
+           run: sudo apt-get update && sudo apt-get install -y archlinux-keyring pkgbuild-utils
 
          - name: Clone AUR repository and update PKGBUILD
            run: |
@@ -47,7 +47,7 @@ jobs:
              fi
              VERSION="${TAG#v}"
              sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-             makepkg --printsrcinfo > .SRCINFO
+             mksrcinfo --printsrcinfo > .SRCINFO
              git add PKGBUILD .SRCINFO
              if git diff --cached --quiet; then
                echo "No changes to commit"
