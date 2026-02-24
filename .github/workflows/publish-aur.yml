@@ -1,4 +1,4 @@
-   name: Publish to AUR
+name: Publish to AUR
 
    on:
      push:
@@ -27,35 +27,33 @@
 
          - name: Set up SSH for AUR
            run: |
-             # SSH key 必须属于 builder 用户
              mkdir -p /home/builder/.ssh
              echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > /home/builder/.ssh/id_ed25519
              chmod 600 /home/builder/.ssh/id_ed25519
              chmod 700 /home/builder/.ssh
 
-             # 扫描 host key (尝试运行，忽略错误，依靠 StrictHostKeyChecking=no)
+             # 扫描 host key
              ssh-keyscan -t ed25519 aur.archlinux.org >> /home/builder/.ssh/known_hosts || true
              chmod 644 /home/builder/.ssh/known_hosts
 
-             # 修正所有权
              chown -R builder:builder /home/builder/.ssh
 
          - name: Clone AUR repo
            run: |
-             # 切换到 builder 用户运行 git clone
-             # 使用 StrictHostKeyChecking=no 跳过 host key 检查
-             sudo -u builder bash -c 'GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no" git clone ssh://aur@aur.archlinux.org/soon.git /home/builder/aur-push'
+             # 使用 sudo -u builder <<EOF 方式避免引号噩梦
+             sudo -u builder bash <<EOF
+               export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no"
+               git clone ssh://aur@aur.archlinux.org/soon.git /home/builder/aur-push
+             EOF
 
          - name: Set git user
            run: |
-             # 为 builder 用户配置 git
              sudo -u builder git config --global user.name "github-actions[bot]"
              sudo -u builder git config --global user.email "github-actions[bot]@users.noreply.github.com"
              sudo -u builder git config --global --add safe.directory /home/builder/aur-push
 
          - name: Update PKGBUILD and .SRCINFO
            run: |
-             # 确定 TAG
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
@@ -64,29 +62,24 @@
              VERSION="${TAG#v}"
              echo "Updating to version: $VERSION"
 
-             # 切换到 builder 用户执行构建和提交
-             # 我们把逻辑写在一个 script block 里传给 sudo -u builder bash -c
-             sudo -u builder bash -c "
+             # 使用 EOF 块，清晰且安全
+             sudo -u builder bash <<EOF
                cd /home/builder/aur-push
-
-               # 修改版本号
-               sed -i 's/^pkgver=.*/pkgver=${VERSION}/' PKGBUILD
-
-               # 生成 .SRCINFO (现在是 builder 用户，makepkg 可以运行了)
+               sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
                makepkg --printsrcinfo > .SRCINFO
 
                git add PKGBUILD .SRCINFO
-
                if ! git diff --cached --quiet; then
-                 git commit -m 'release: $VERSION'
+                 git commit -m "release: $VERSION"
                else
-                 echo 'No changes to commit'
+                 echo "No changes to commit"
                fi
-             "
+             EOF
 
          - name: Publish to AUR with aurpublish
            run: |
-             # 切换到 builder 用户发布
-             sudo -u builder bash -c '
+             sudo -u builder bash <<EOF
                cd /home/builder/aur-push
-               GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no" aurpublish soon
+               export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no"
+               aurpublish soon
+             EOF
