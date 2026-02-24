@@ -35,6 +35,7 @@
 
          - name: Prepare PKGBUILD and .SRCINFO
            run: |
+             cd $GITHUB_WORKSPACE
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
