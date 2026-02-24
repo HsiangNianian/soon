@@ -34,9 +34,6 @@ jobs:
       - name: Clone AUR repository
         run: |
           git clone ssh://aur@aur.archlinux.org/soon.git aur-repo
-
-      - name: Update PKGBUILD and .SRCINFO in AUR repo
-        run: |
           cd aur-repo
           cp ../PKGBUILD .
           makepkg --printsrcinfo > .SRCINFO
