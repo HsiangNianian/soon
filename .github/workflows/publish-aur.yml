@@ -1,4 +1,3 @@
-
    name: Publish to AUR
 
    on:
@@ -27,23 +26,33 @@
              echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
              chmod 600 ~/.ssh/id_ed25519
              chmod 700 ~/.ssh
-             ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+
+             # 尝试扫描 key，如果失败也不要让脚本退出，依靠后面的 StrictHostKeyChecking=no
+             ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts || true
              chmod 644 ~/.ssh/known_hosts
+
+         - name: Debug SSH files (Before Clone)
+           run: |
+             echo "=== User Info ==="
+             whoami
+             echo "=== SSH Dir ==="
+             ls -la ~/.ssh
+             echo "=== Known Hosts Content ==="
+             cat ~/.ssh/known_hosts || echo "known_hosts not found"
+             echo "=== Private Key Check (first line) ==="
+             head -n 1 ~/.ssh/id_ed25519
 
          - name: Set git user
            run: |
              git config --global user.name "github-actions[bot]"
              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+             # 标记该目录安全，防止git报错
+             git config --global --add safe.directory $GITHUB_WORKSPACE
 
          - name: Clone AUR repo
            run: |
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
-   
-         - name: Debug SSH files
-           run: |
-             ls -l ~/.ssh
-             cat ~/.ssh/known_hosts
-             cat ~/.ssh/id_ed25519
+             # 注意这里加了 StrictHostKeyChecking=no
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=no" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
 
          - name: Update PKGBUILD and .SRCINFO
            run: |
@@ -53,11 +62,30 @@
              else
                TAG="${GITHUB_REF##*/}"
              fi
+             # 去掉 v 前缀
              VERSION="${TAG#v}"
+             echo "Updating to version: $VERSION"
+
              sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+
+             # 更新 checksums (如果 PKGBUILD 里有 sha256sums 且不是 SKIP，这一步很重要，如果是 SKIP 则无所谓)
+             # updpkgsums
+
              makepkg --printsrcinfo > .SRCINFO
+
+             # 提交更改到 aur-push 本地仓库
+             git add PKGBUILD .SRCINFO
+
+             # 检查是否有变更，有变更才 commit
+             if ! git diff --cached --quiet; then
+               git commit -m "release: $VERSION"
+             else
+               echo "No changes to commit"
+             fi
 
          - name: Publish to AUR with aurpublish
            run: |
              cd aur-push
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" aurpublish soon
+             # 同样加上 StrictHostKeyChecking=no
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts -o
+  StrictHostKeyChecking=no" aurpublish soon
