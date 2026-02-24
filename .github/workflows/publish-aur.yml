@@ -35,9 +35,13 @@
              git config --global user.name "github-actions[bot]"
              git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+         - name: Clone AUR repo
+           run: |
+             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
+
          - name: Update PKGBUILD and .SRCINFO
            run: |
-             cd $GITHUB_WORKSPACE
+             cd aur-push
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
@@ -49,5 +53,5 @@
 
          - name: Publish to AUR with aurpublish
            run: |
-             cd $GITHUB_WORKSPACE
+             cd aur-push
              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts" aurpublish soon
