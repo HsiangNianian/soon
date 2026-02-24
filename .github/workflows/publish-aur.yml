@@ -18,74 +18,75 @@
          image: archlinux:latest
        steps:
          - name: Install dependencies
-           run: pacman -Sy --noconfirm git openssh base-devel aurpublish
+           run: |
+             pacman -Sy --noconfirm git openssh base-devel aurpublish sudo
+             # 创建 builder 用户
+             useradd -m builder
+             # 允许 builder 无密码 sudo
+             echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
          - name: Set up SSH for AUR
            run: |
-             mkdir -p ~/.ssh
-             echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-             chmod 600 ~/.ssh/id_ed25519
-             chmod 700 ~/.ssh
+             # SSH key 必须属于 builder 用户
+             mkdir -p /home/builder/.ssh
+             echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > /home/builder/.ssh/id_ed25519
+             chmod 600 /home/builder/.ssh/id_ed25519
+             chmod 700 /home/builder/.ssh
 
-             # 尝试扫描 key，如果失败也不要让脚本退出，依靠后面的 StrictHostKeyChecking=no
-             ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts || true
-             chmod 644 ~/.ssh/known_hosts
+             # 扫描 host key (尝试运行，忽略错误，依靠 StrictHostKeyChecking=no)
+             ssh-keyscan -t ed25519 aur.archlinux.org >> /home/builder/.ssh/known_hosts || true
+             chmod 644 /home/builder/.ssh/known_hosts
 
-         - name: Debug SSH files (Before Clone)
-           run: |
-             echo "=== User Info ==="
-             whoami
-             echo "=== SSH Dir ==="
-             ls -la ~/.ssh
-             echo "=== Known Hosts Content ==="
-             cat ~/.ssh/known_hosts || echo "known_hosts not found"
-             echo "=== Private Key Check (first line) ==="
-             head -n 1 ~/.ssh/id_ed25519
-
-         - name: Set git user
-           run: |
-             git config --global user.name "github-actions[bot]"
-             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-             # 标记该目录安全，防止git报错
-             git config --global --add safe.directory $GITHUB_WORKSPACE
+             # 修正所有权
+             chown -R builder:builder /home/builder/.ssh
 
          - name: Clone AUR repo
            run: |
-             # 注意这里加了 StrictHostKeyChecking=no
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=no" git clone ssh://aur@aur.archlinux.org/soon.git aur-push
+             # 切换到 builder 用户运行 git clone
+             # 使用 StrictHostKeyChecking=no 跳过 host key 检查
+             sudo -u builder bash -c 'GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no" git clone ssh://aur@aur.archlinux.org/soon.git /home/builder/aur-push'
+
+         - name: Set git user
+           run: |
+             # 为 builder 用户配置 git
+             sudo -u builder git config --global user.name "github-actions[bot]"
+             sudo -u builder git config --global user.email "github-actions[bot]@users.noreply.github.com"
+             sudo -u builder git config --global --add safe.directory /home/builder/aur-push
 
          - name: Update PKGBUILD and .SRCINFO
            run: |
-             cd aur-push
+             # 确定 TAG
              if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
                TAG="${{ github.event.inputs.tag }}"
              else
                TAG="${GITHUB_REF##*/}"
              fi
-             # 去掉 v 前缀
              VERSION="${TAG#v}"
              echo "Updating to version: $VERSION"
 
-             sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+             # 切换到 builder 用户执行构建和提交
+             # 我们把逻辑写在一个 script block 里传给 sudo -u builder bash -c
+             sudo -u builder bash -c "
+               cd /home/builder/aur-push
 
-             # 更新 checksums (如果 PKGBUILD 里有 sha256sums 且不是 SKIP，这一步很重要，如果是 SKIP 则无所谓)
-             # updpkgsums
+               # 修改版本号
+               sed -i 's/^pkgver=.*/pkgver=${VERSION}/' PKGBUILD
 
-             makepkg --printsrcinfo > .SRCINFO
+               # 生成 .SRCINFO (现在是 builder 用户，makepkg 可以运行了)
+               makepkg --printsrcinfo > .SRCINFO
 
-             # 提交更改到 aur-push 本地仓库
-             git add PKGBUILD .SRCINFO
+               git add PKGBUILD .SRCINFO
 
-             # 检查是否有变更，有变更才 commit
-             if ! git diff --cached --quiet; then
-               git commit -m "release: $VERSION"
-             else
-               echo "No changes to commit"
-             fi
+               if ! git diff --cached --quiet; then
+                 git commit -m 'release: $VERSION'
+               else
+                 echo 'No changes to commit'
+               fi
+             "
 
          - name: Publish to AUR with aurpublish
            run: |
-             cd aur-push
-             # 同样加上 StrictHostKeyChecking=no
-             GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=~/.ssh/known_hosts -o
-  StrictHostKeyChecking=no" aurpublish soon
+             # 切换到 builder 用户发布
+             sudo -u builder bash -c '
+               cd /home/builder/aur-push
+               GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/id_ed25519 -o UserKnownHostsFile=/home/builder/.ssh/known_hosts -o StrictHostKeyChecking=no" aurpublish soon
