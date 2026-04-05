@@ -1,141 +1,183 @@
-# Soon
+<div align="center">
 
-[![Publish to AUR](https://github.com/HsiangNianian/soon/actions/workflows/publish-aur.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-aur.yml)
+# soon
+
+**Predict your next shell command before you type it.**
+
+[![crates.io](https://img.shields.io/crates/v/soon.svg)](https://crates.io/crates/soon)
+[![PyPI](https://img.shields.io/pypi/v/soon-bin.svg)](https://pypi.org/project/soon-bin/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Publish to crates.io](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml)
 [![Publish to PyPI](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml)
 
+A command-line agent that learns your shell habits — tracking command sequences, time patterns, and directory context — to predict what you'll type next.
 
-> 🤖 Predict your next shell command based on history — like shell autocomplete, but MORE stupid
+Not autocomplete. **Precognition.**
 
-<img align="right" src="https://repology.org/badge/vertical-allrepos/soon.svg?columns=2" />
+<img src="image/showcase.jpg" width="600" alt="Soon showcase" />
 
-- 🐚 Shell-aware (supports Bash, Zsh, Fish)
-- 📊 Shows your most used commands
-- 🌍 i18n support (EN/中文) (WIP)
-- 💡 Designed for clarity — **not** an autocomplete tool, but a prediction assistant.
+</div>
 
-![Soon](image/showcase.jpg)
+---
+
+## Features
+
+| | Feature | Description |
+|---|---|---|
+| **7 shells** | bash · zsh · fish · nushell · elvish · PowerShell · tcsh |
+| **Learn** | Ingests history across all shells, builds transition graphs, time/dir patterns, and trigram vectors |
+| **Markov** | Blended order-1 / order-2 Markov chain for sequence prediction |
+| **Fuzzy** | Character-trigram TF-IDF similarity search across your command vocabulary |
+| **LLM** | Optional OpenAI / Ollama integration — send context, get JSON predictions |
+| **Config** | TOML config at `~/.config/soon/config.toml`, CLI-editable |
+| **Update** | Self-update via `soon update` — auto-detects cargo / pip / AUR |
 
 ## Install
 
-1. Archlinux
+```bash
+# Cargo (recommended)
+cargo install soon
 
-```shell
+# Python
+pip install soon-bin
+
+# Arch Linux (AUR)
 paru -Sy soon
 ```
 
-2. Cargo
+## Quick Start
 
-```shell
-cargo install soon
+```bash
+# Predict your next command
+soon
+
+# Learn from your current shell history
+soon learn ingest
+
+# Learn from ALL shells at once
+soon learn ingest-all
+
+# See intelligent predictions
+soon learn predict
+
+# Initialize config file
+soon config init
 ```
 
-3. Python
+## Commands
 
 ```
-pip install soon-bin
+soon                    Predict next command (default)
+soon now                Same as above, explicit
+soon stats              Show your most used commands
+soon which              Show detected shell & diagnostics
+soon update             Self-update to latest version
+soon config             View / manage configuration
+soon learn              Intelligent learning & prediction
 ```
 
-## Usage
+### `soon learn`
 
-```shell
-»»»» soon help                                                                                                                                                                                      0|00:00:54
-Predict your next shell command based on history
-
-Usage: soon [OPTIONS] [COMMAND]
-
-Commands:
-  now                  Show the most likely next command
-  stats                Show most used commands
-  learn                Train prediction (WIP)
-  which                Display detected current shell
-  version              Show version information
-  update               Update self [WIP]
-  show-cache           Show cached main commands
-  show-internal-cache  Show internal cache commands
-  cache                Cache a command to soon cache (for testing)
-  help                 Print this message or the help of the given subcommand(s)
-
-Options:
-      --shell <SHELL>  
-      --ngram <NGRAM>  [default: 3]
-      --debug          Enable debug output
-  -h, --help           Print help
-  -V, --version        Print version
+```
+soon learn              Show status & available actions
+soon learn ingest       Ingest current shell history
+soon learn ingest-all   Ingest from all detected shells
+soon learn stats        Show learn database statistics
+soon learn predict      Predict using learned patterns
+soon learn similar <q>  Fuzzy-find similar commands
+soon learn ask          Ask LLM for predictions
+soon learn reset        Reset the learn database
 ```
 
-### Main Commands
+### `soon config`
 
-| Command               | Description                                      |
-|-----------------------|--------------------------------------------------|
-| `now`                 | Show the most likely next command                |
-| `stats`               | Show most used commands                          |
-| `learn`               | Train prediction (WIP)                           |
-| `which`               | Display detected current shell                   |
-| `version`             | Show version information                         |
-| `update`              | Update self (WIP)                                |
-| `show-cache`          | Show cached main commands                        |
-| `show-internal-cache` | Show internal cache commands                     |
-| `cache <NUM>`         | Set cache size to `<NUM>` and refresh cache      |
-| `help`                | Print this message or the help of subcommands    |
+```
+soon config             Show all configuration
+soon config init        Create default config file
+soon config path        Print config file path
+soon config get <KEY>   Get a value  (e.g. general.ngram)
+soon config set <K> <V> Set a value  (e.g. general.ngram 5)
+```
 
-### Options
+<details>
+<summary><b>Configuration reference</b></summary>
 
-| Option           | Description                                 |
-|------------------|---------------------------------------------|
-| `--shell <SHELL>`| Specify shell type (bash, zsh, fish, etc.)  |
-| `--ngram <NGRAM>`| Set n-gram length for prediction (default: 3)|
-| `--debug`        | Enable debug output                         |
-| `-h, --help`     | Print help                                  |
-| `-V, --version`  | Print version                               |
+```toml
+# ~/.config/soon/config.toml
+
+[general]
+shell = "auto"                    # auto / bash / zsh / fish / nushell / elvish / powershell / tcsh
+ngram = 3                         # n-gram window for classic prediction
+ignored_commands = ["soon", "cd", "ls", "pwd", "exit", "clear"]
+
+[update]
+channel = "auto"                  # auto / cargo / pip / aur / binary
+
+[llm]
+provider = ""                     # openai / ollama
+api_url = ""                      # e.g. https://api.openai.com or http://localhost:11434
+api_key = ""                      # your API key (leave empty for Ollama)
+model = ""                        # e.g. gpt-4o-mini, llama3.2
+prompt = ""                       # custom prompt (use {commands} and {directory} placeholders)
+```
+
+</details>
+
+## How It Works
+
+### Classic Prediction (`soon now`)
+
+Reads the last N commands from your shell history, scans for matching n-gram patterns, and scores candidates by recency and match ratio.
+
+### Learned Prediction (`soon learn predict`)
+
+Uses a multi-signal fusion engine:
+
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Bigram transition | 35% | What usually follows the last 2 commands |
+| Single transition | 25% | What usually follows the last command |
+| Directory context | 20% | What you run in this directory |
+| Time-of-day | 15% | What you run at this hour |
+| Day-of-week | 5% | Weekday vs weekend patterns |
+
+Fallback: Blended Markov chain (order-1 + order-2).
+
+### Fuzzy Search (`soon learn similar`)
+
+Character-trigram TF-IDF vectors with cosine similarity — finds commands that *look like* your query even with typos.
+
+### LLM Mode (`soon learn ask`)
+
+Sends your recent commands + current directory + time to a configured OpenAI-compatible or Ollama endpoint. The LLM returns JSON predictions with confidence scores and reasoning.
+
+```bash
+# OpenAI setup
+soon config set llm.provider openai
+soon config set llm.api_url https://api.openai.com
+soon config set llm.api_key sk-...
+
+# Ollama setup (local, no key needed)
+soon config set llm.provider ollama
+soon config set llm.api_url http://localhost:11434
+```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--shell <SHELL>` | Override shell detection |
+| `--ngram <N>` | Set n-gram window size |
+| `--debug` | Show debug output |
+| `-h, --help` | Print help |
+| `-V, --version` | Print version |
 
 ---
 
-### Examples
+<div align="center">
 
-#### Predict your next command (default ngram=3)
-```shell
-soon now
-```
+MIT &copy; 2025-PRESENT [HsiangNianian](https://github.com/HsiangNianian)
 
-#### Show your most used commands
-```shell
-soon stats
-```
-
-#### Show cached main commands (default ngram=3)
-```shell
-soon show-cache
-```
-
-#### Show cached main commands with custom cache size (e.g., 10)
-```shell
-soon cache 10
-soon show-cache --ngram 10
-```
-
-#### Set shell type explicitly (if auto-detect fails)
-```shell
-soon now --shell zsh
-```
-
-#### Enable debug output
-```shell
-soon now --debug
-```
-
----
-
-### How cache works
-
-- The `.soon_cache` file always contains the latest N main commands (N = cache size).
-- Every time you run `soon now`, `soon cache <NUM>`, or `soon show-cache`, the cache is refreshed from your shell history.
-- The cache size is controlled by the `<NUM>` argument in `soon cache <NUM>` or by `--ngram <NGRAM>` option.
-
-
----
-
-MIT © 2025-PRESENT 简律纯.
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon?ref=badge_shield&issueType=security)
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon.svg?type=large&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2FHsiangNianian%2Fsoon?ref=badge_large&issueType=license)
+</div>
