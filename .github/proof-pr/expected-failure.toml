@@ -1,0 +1,7 @@
+[verify]
+base = "master"
+timeout = 60
+
+[[verify.checks]]
+name = "intentional-failure"
+command = ["python3", "-c", "raise SystemExit(9)"]
