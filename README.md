@@ -7,6 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/soon.svg)](https://crates.io/crates/soon)
 [![PyPI](https://img.shields.io/pypi/v/soon-bin.svg)](https://pypi.org/project/soon-bin/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![proof-pr](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml)
 [![Publish to crates.io](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-crates.yml)
 [![Publish to PyPI](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/publish-pypi.yml)
 

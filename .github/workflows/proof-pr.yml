@@ -1,0 +1,63 @@
+name: proof-pr
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify commit-bound evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: HsiangNianian/proof-pr@v0.1.0
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+
+  rejection-contract:
+    name: Reject failed evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Exercise a failing verification
+        id: proof
+        continue-on-error: true
+        uses: HsiangNianian/proof-pr@v0.1.0
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          config: .github/proof-pr/expected-failure.toml
+          output-dir: .proof-pr/expected-failure
+
+      - name: Confirm the failure was enforced
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          PROOF_OUTCOME: ${{ steps.proof.outcome }}
+          PROOF_VERDICT: ${{ steps.proof.outputs.verdict }}
+          REPORT_PATH: ${{ steps.proof.outputs.report-json }}
+        run: |
+          test "$PROOF_OUTCOME" = "failure"
+          test "$PROOF_VERDICT" = "FAILED"
+          test "$REPORT_PATH" = ".proof-pr/expected-failure/report.json"
+          python - "$REPORT_PATH" "$EXPECTED_HEAD" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          report = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert report["verdict"] == "FAILED"
+          assert report["head_sha"] == sys.argv[2]
+          assert report["checks"][0]["exit_code"] == 9
+          PY
