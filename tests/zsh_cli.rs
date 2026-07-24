@@ -1,14 +1,21 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static NEXT_HOME: AtomicU64 = AtomicU64::new(0);
 
 fn isolated_home() -> PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock")
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("soon-zsh-test-{}-{nonce}", std::process::id()));
+    let sequence = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!(
+        "soon-zsh-test-{}-{nonce}-{sequence}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&path).expect("create isolated home");
     path
 }
@@ -84,4 +91,32 @@ fn raw_prediction_uses_the_submitted_command_as_context() {
         String::from_utf8(output.stdout).expect("UTF-8 prediction"),
         "cargo test --workspace\n"
     );
+}
+
+#[test]
+fn debug_output_does_not_print_sensitive_history_text() {
+    let home = isolated_home();
+    let secret = "debug-secret-value";
+    std::fs::write(
+        home.join(".zsh_history"),
+        format!("cargo test\nexport API_TOKEN={secret}\n"),
+    )
+    .expect("write Zsh history");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_soon"))
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .args(["--shell", "zsh", "--debug", "now"])
+        .output()
+        .expect("run debug prediction");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 debug output");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        output.status.success(),
+        "debug prediction failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!stdout.contains(secret), "debug output leaked a secret");
+    assert!(!stdout.contains("export API_TOKEN="), "{stdout}");
 }

@@ -5,6 +5,7 @@ mod config;
 mod events;
 mod learn;
 mod predict;
+mod privacy;
 mod shell;
 
 use clap::Parser;

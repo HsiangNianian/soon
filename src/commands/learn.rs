@@ -5,16 +5,17 @@ use crate::cli::LearnAction;
 use crate::config::AppConfig;
 use crate::learn::{self, db::LearnDb, llm, markov, pattern, trigram};
 use crate::predict::main_cmd;
+use crate::privacy;
 use crate::shell::{self, ShellKind};
 
 pub fn run(action: Option<LearnAction>, shell: &ShellKind, config: &AppConfig) {
     match action {
         None => show_status(config),
-        Some(LearnAction::Ingest) => ingest_current(shell),
-        Some(LearnAction::IngestAll) => ingest_all(),
-        Some(LearnAction::Stats) => show_stats(),
+        Some(LearnAction::Ingest) => ingest_current(shell, config),
+        Some(LearnAction::IngestAll) => ingest_all(config),
+        Some(LearnAction::Stats) => show_stats(config),
         Some(LearnAction::Predict { num }) => predict(shell, config, num),
-        Some(LearnAction::Similar { query, num }) => similar(&query, num),
+        Some(LearnAction::Similar { query, num }) => similar(&query, num, config),
         Some(LearnAction::Ask { num }) => ask_llm(shell, config, num),
         Some(LearnAction::Reset) => reset(),
     }
@@ -75,13 +76,13 @@ fn show_status(config: &AppConfig) {
     }
 }
 
-fn ingest_current(shell: &ShellKind) {
+fn ingest_current(shell: &ShellKind, config: &AppConfig) {
     let db_path = learn::db_path();
     let mut db = LearnDb::load(&db_path);
 
     println!("{}", format!("Ingesting history from {}...", shell).cyan());
 
-    let count = pattern::ingest_shell_history(&mut db, shell);
+    let count = pattern::ingest_shell_history(&mut db, shell, config);
 
     // Rebuild trigram index
     println!("{}", "Rebuilding trigram index...".dimmed());
@@ -104,7 +105,7 @@ fn ingest_current(shell: &ShellKind) {
     }
 }
 
-fn ingest_all() {
+fn ingest_all(config: &AppConfig) {
     let db_path = learn::db_path();
     let mut db = LearnDb::load(&db_path);
 
@@ -124,7 +125,7 @@ fn ingest_all() {
     for shell in &shells {
         if let Some(path) = shell::history_path(shell) {
             if path.exists() {
-                let count = pattern::ingest_shell_history(&mut db, shell);
+                let count = pattern::ingest_shell_history(&mut db, shell, config);
                 if count > 0 {
                     println!("  {} +{} entries", shell, count);
                     total += count;
@@ -156,7 +157,7 @@ fn ingest_all() {
     }
 }
 
-fn show_stats() {
+fn show_stats(config: &AppConfig) {
     let db_path = learn::db_path();
     let db = LearnDb::load(&db_path);
     let stats = db.stats();
@@ -198,7 +199,11 @@ fn show_stats() {
         let mut all_transitions: Vec<(&String, &String, &u32)> = Vec::new();
         for (from, targets) in &db.transitions {
             for (to, count) in targets {
-                all_transitions.push((from, to, count));
+                if privacy::rejection_reason(from, config).is_none()
+                    && privacy::rejection_reason(to, config).is_none()
+                {
+                    all_transitions.push((from, to, count));
+                }
             }
         }
         all_transitions.sort_by(|a, b| b.2.cmp(a.2));
@@ -257,7 +262,10 @@ fn predict(shell: &ShellKind, config: &AppConfig, n: usize) {
 
     if local_preds.is_empty() {
         // Fall back to Markov chain
-        let markov_preds = markov::markov_blend(&db, &recent, n);
+        let markov_preds: Vec<_> = markov::markov_blend(&db, &recent, n)
+            .into_iter()
+            .filter(|(command, _)| privacy::rejection_reason(command, config).is_none())
+            .collect();
         if markov_preds.is_empty() {
             println!(
                 "{}",
@@ -288,7 +296,7 @@ fn predict(shell: &ShellKind, config: &AppConfig, n: usize) {
     }
 }
 
-fn similar(query: &str, n: usize) {
+fn similar(query: &str, n: usize, config: &AppConfig) {
     let db_path = learn::db_path();
     let db = LearnDb::load(&db_path);
 
@@ -304,7 +312,10 @@ fn similar(query: &str, n: usize) {
     let all_cmds: Vec<&str> = db.trigram_index.keys().map(|s| s.as_str()).collect();
     let idf_weights = trigram::build_idf(&all_cmds);
 
-    let results = trigram::find_similar(query, &db.trigram_index, &idf_weights, n);
+    let results: Vec<_> = trigram::find_similar(query, &db.trigram_index, &idf_weights, n)
+        .into_iter()
+        .filter(|(command, _)| privacy::rejection_reason(command, config).is_none())
+        .collect();
 
     println!(
         "{}",
@@ -333,7 +344,8 @@ fn ask_llm(shell: &ShellKind, config: &AppConfig, n: usize) {
         println!("{}", "To set up LLM predictions, configure:".dimmed());
         println!("  soon config set llm.provider openai    # or 'ollama'");
         println!("  soon config set llm.api_url https://api.openai.com");
-        println!("  soon config set llm.api_key sk-...");
+        println!("  export SOON_LLM_API_KEY from a password manager or hidden prompt");
+        println!("  soon config set llm.api_key_env SOON_LLM_API_KEY  # optional");
         println!("  soon config set llm.model gpt-4o-mini  # optional");
         println!();
         println!("{}", "For Ollama (local, no API key needed):".dimmed());

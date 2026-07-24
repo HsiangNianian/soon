@@ -12,6 +12,8 @@ pub struct AppConfig {
     pub llm: LlmConfig,
     #[serde(default)]
     pub events: EventsConfig,
+    #[serde(default)]
+    pub privacy: PrivacyConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,14 +32,14 @@ pub struct UpdateConfig {
     pub channel: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     #[serde(default)]
     pub provider: String,
     #[serde(default)]
     pub api_url: String,
-    #[serde(default)]
-    pub api_key: String,
+    #[serde(default = "default_api_key_env")]
+    pub api_key_env: String,
     #[serde(default)]
     pub model: String,
     #[serde(default)]
@@ -48,6 +50,14 @@ pub struct LlmConfig {
 pub struct EventsConfig {
     #[serde(default = "default_event_retention")]
     pub retention: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PrivacyConfig {
+    #[serde(default)]
+    pub excluded_literals: Vec<String>,
+    #[serde(default)]
+    pub excluded_patterns: Vec<String>,
 }
 
 fn default_shell() -> String {
@@ -64,6 +74,10 @@ fn default_channel() -> String {
 
 fn default_event_retention() -> usize {
     10_000
+}
+
+fn default_api_key_env() -> String {
+    "SOON_LLM_API_KEY".to_string()
 }
 
 fn default_ignored_commands() -> Vec<String> {
@@ -99,6 +113,18 @@ impl Default for EventsConfig {
     fn default() -> Self {
         Self {
             retention: default_event_retention(),
+        }
+    }
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: String::new(),
+            api_url: String::new(),
+            api_key_env: default_api_key_env(),
+            model: String::new(),
+            prompt: String::new(),
         }
     }
 }
@@ -144,16 +170,17 @@ impl AppConfig {
             "update.channel" => Some(self.update.channel.clone()),
             "llm.provider" => Some(self.llm.provider.clone()),
             "llm.api_url" => Some(self.llm.api_url.clone()),
-            "llm.api_key" => {
-                if self.llm.api_key.is_empty() {
-                    Some(String::new())
-                } else {
-                    Some("****".to_string())
-                }
-            }
+            "llm.api_key_env" => Some(self.llm.api_key_env.clone()),
             "llm.model" => Some(self.llm.model.clone()),
             "llm.prompt" => Some(self.llm.prompt.clone()),
             "events.retention" => Some(self.events.retention.to_string()),
+            "privacy.excluded_literals" => Some(format!(
+                "[{}]",
+                vec!["<redacted>"; self.privacy.excluded_literals.len()].join(", ")
+            )),
+            "privacy.excluded_patterns" => {
+                Some(format!("[{}]", self.privacy.excluded_patterns.join(", ")))
+            }
             _ => None,
         }
     }
@@ -186,7 +213,18 @@ impl AppConfig {
             }
             "llm.provider" => self.llm.provider = value.to_string(),
             "llm.api_url" => self.llm.api_url = value.to_string(),
-            "llm.api_key" => self.llm.api_key = value.to_string(),
+            "llm.api_key" => {
+                return Err(
+                    "Provider credentials are not stored; configure llm.api_key_env and export that environment variable"
+                        .to_string(),
+                );
+            }
+            "llm.api_key_env" => {
+                if !is_valid_env_name(value) {
+                    return Err("Invalid provider credential environment variable name".to_string());
+                }
+                self.llm.api_key_env = value.to_string();
+            }
             "llm.model" => self.llm.model = value.to_string(),
             "llm.prompt" => self.llm.prompt = value.to_string(),
             "events.retention" => {
@@ -198,8 +236,44 @@ impl AppConfig {
                 }
                 self.events.retention = retention;
             }
+            "privacy.excluded_literals" => {
+                self.privacy.excluded_literals = parse_list(value);
+            }
+            "privacy.excluded_patterns" => {
+                let patterns = parse_list(value);
+                if patterns
+                    .iter()
+                    .any(|pattern| regex::Regex::new(pattern).is_err())
+                {
+                    return Err("Invalid privacy exclusion pattern".to_string());
+                }
+                self.privacy.excluded_patterns = patterns;
+            }
             _ => return Err(format!("Unknown config key: {}", key)),
         }
         Ok(())
     }
+
+    pub fn redacted(&self) -> Self {
+        let mut redacted = self.clone();
+        for literal in &mut redacted.privacy.excluded_literals {
+            *literal = "<redacted>".to_string();
+        }
+        redacted
+    }
+}
+
+fn is_valid_env_name(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('_' | 'A'..='Z' | 'a'..='z'))
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn parse_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
 }

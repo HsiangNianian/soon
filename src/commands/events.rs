@@ -27,7 +27,7 @@ pub fn run(action: EventsAction, config: &AppConfig) {
                 shell,
                 previous_event_id: previous_id,
             },
-            config.events.retention,
+            config,
         ),
         EventsAction::RecordSuggestion {
             id,
@@ -53,7 +53,7 @@ pub fn run(action: EventsAction, config: &AppConfig) {
                     outcome,
                     latency_ms,
                 },
-                config.events.retention,
+                config,
             );
         }
     }
@@ -85,15 +85,15 @@ fn inspect(retention: usize) {
     println!("Malformed lines: {}", stats.malformed_lines);
 }
 
-fn record_command(event: CommandEvent, retention: usize) {
-    if let Err(error) = events::record_command(event, retention) {
+fn record_command(event: CommandEvent, config: &AppConfig) {
+    if let Err(error) = events::record_command(event, config) {
         eprintln!("{error}");
         std::process::exit(1);
     }
 }
 
-fn record_suggestion(event: SuggestionEvent, retention: usize) {
-    if let Err(error) = events::record_suggestion(event, retention) {
+fn record_suggestion(event: SuggestionEvent, config: &AppConfig) {
+    if let Err(error) = events::record_suggestion(event, config) {
         eprintln!("{error}");
         std::process::exit(1);
     }

@@ -15,7 +15,7 @@ pub fn run(action: Option<ConfigAction>) {
 
 fn show_all() {
     let config = AppConfig::load();
-    let content = toml::to_string_pretty(&config)
+    let content = toml::to_string_pretty(&config.redacted())
         .unwrap_or_else(|_| "Failed to serialize config".to_string());
     let path = AppConfig::config_path();
 
@@ -75,7 +75,8 @@ fn get_value(key: &str) {
             eprintln!("  general.shell, general.ngram, general.ignored_commands");
             eprintln!("  update.channel");
             eprintln!("  events.retention");
-            eprintln!("  llm.provider, llm.api_url, llm.api_key, llm.model, llm.prompt");
+            eprintln!("  privacy.excluded_literals, privacy.excluded_patterns");
+            eprintln!("  llm.provider, llm.api_url, llm.api_key_env, llm.model, llm.prompt");
             std::process::exit(1);
         }
     }
@@ -86,7 +87,11 @@ fn set_value(key: &str, value: &str) {
     match config.set_value(key, value) {
         Ok(()) => match config.save() {
             Ok(()) => {
-                println!("{}", format!("{} = {}", key, value).green());
+                if key == "privacy.excluded_literals" {
+                    println!("{}", format!("{} = <redacted>", key).green());
+                } else {
+                    println!("{}", format!("{} = {}", key, value).green());
+                }
             }
             Err(e) => {
                 eprintln!("{}", format!("Failed to save config: {}", e).red());
