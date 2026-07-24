@@ -65,10 +65,7 @@ impl LearnDb {
 
     /// Record a transition: after `from` the user typed `to`.
     pub fn record_transition(&mut self, from: &str, to: &str) {
-        let entry = self
-            .transitions
-            .entry(from.to_string())
-            .or_default();
+        let entry = self.transitions.entry(from.to_string()).or_default();
         *entry.entry(to.to_string()).or_insert(0) += 1;
     }
 

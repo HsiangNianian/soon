@@ -106,17 +106,10 @@ pub fn detect_shell() -> ShellKind {
     // Fallback: try /proc/<ppid>/comm on Linux
     #[cfg(target_os = "linux")]
     {
-        if let Ok(ppid) = env::var("PPID")
-            .or_else(|_| {
-                std::fs::read_to_string("/proc/self/stat")
-                    .map(|s| {
-                        s.split_whitespace()
-                            .nth(3)
-                            .unwrap_or("0")
-                            .to_string()
-                    })
-            })
-        {
+        if let Ok(ppid) = env::var("PPID").or_else(|_| {
+            std::fs::read_to_string("/proc/self/stat")
+                .map(|s| s.split_whitespace().nth(3).unwrap_or("0").to_string())
+        }) {
             if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", ppid)) {
                 let name = comm.trim();
                 let kind = ShellKind::from_str(name);
@@ -146,8 +139,7 @@ pub fn history_path(shell: &ShellKind) -> Option<PathBuf> {
         }
         ShellKind::Elvish => {
             // elvish command history (JSONL format)
-            let data_dir = dirs::data_dir()
-                .unwrap_or_else(|| home.join(".local/share"));
+            let data_dir = dirs::data_dir().unwrap_or_else(|| home.join(".local/share"));
             Some(data_dir.join("elvish").join("command-history.json"))
         }
         ShellKind::PowerShell => Some(powershell::psreadline_history_path()),
