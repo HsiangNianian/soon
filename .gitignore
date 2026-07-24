@@ -176,3 +176,9 @@ cython_debug/
 
 # Cargo Lock
 Cargo.lock
+
+# uv lock
+uv.lock
+
+# python version
+.python-version
