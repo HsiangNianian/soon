@@ -1,0 +1,23 @@
+[verify]
+base = "master"
+timeout = 900
+
+[[verify.checks]]
+name = "cargo-fmt"
+command = ["cargo", "fmt", "--all", "--", "--check"]
+
+[[verify.checks]]
+name = "cargo-check"
+command = ["cargo", "check", "--locked"]
+
+[[verify.checks]]
+name = "cargo-test"
+command = ["cargo", "test", "--locked"]
+
+[[verify.checks]]
+name = "cargo-clippy"
+command = ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"]
+
+[[verify.checks]]
+name = "cli-smoke"
+command = ["cargo", "run", "--locked", "--", "--version"]

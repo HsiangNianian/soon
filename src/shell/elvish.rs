@@ -19,7 +19,10 @@ pub fn parse_elvish_history<R: Read>(reader: std::io::BufReader<R>, result: &mut
                 if !cmd.is_empty() {
                     result.push(HistoryItem {
                         cmd,
-                        path: obj.get("path").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        path: obj
+                            .get("path")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                     });
                 }
             }

@@ -1,5 +1,6 @@
 use colored::*;
 use counter::Counter;
+use std::cmp::Reverse;
 
 use crate::config::AppConfig;
 use crate::predict::{is_ignored_command, main_cmd};
@@ -24,7 +25,7 @@ pub fn run(shell: &ShellKind, config: &AppConfig) {
     }
 
     let mut most_common: Vec<_> = counter.most_common();
-    most_common.sort_by(|a, b| b.1.cmp(&a.1));
+    most_common.sort_by_key(|item| Reverse(item.1));
     most_common.truncate(10);
 
     println!("\n{}", "Top 10 most used commands".bold().cyan());

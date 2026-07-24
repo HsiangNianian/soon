@@ -45,24 +45,12 @@ pub fn run(shell: &ShellKind, ngram: usize, config: &AppConfig, debug: bool) {
             .ok()
             .map(|p| p.to_string_lossy().to_string());
 
-        let learned = pattern::predict_local(
-            &db,
-            &recent,
-            current_dir.as_deref(),
-            config,
-            3,
-        );
+        let learned = pattern::predict_local(&db, &recent, current_dir.as_deref(), config, 3);
 
         if !learned.is_empty() {
-            println!("\n{}", "Learned predictions:".cyan().bold());
-            for (i, (cmd, score)) in learned.iter().enumerate() {
-                let confidence = (score * 100.0).min(99.0) as u8;
-                println!(
-                    "  {} {} {}",
-                    format!("{}.", i + 1).dimmed(),
-                    cmd.green(),
-                    format!("({}%)", confidence).dimmed()
-                );
+            println!("\n{}", "Legacy learned candidates:".cyan().bold());
+            for (i, (cmd, _score)) in learned.iter().enumerate() {
+                println!("  {} {}", format!("{}.", i + 1).dimmed(), cmd.green());
             }
         }
     }
@@ -76,7 +64,10 @@ pub fn run(shell: &ShellKind, ngram: usize, config: &AppConfig, debug: bool) {
         }
         println!("  Learn DB samples: {}", db.total_samples);
 
-        println!("\n{}", "Cached main commands (from history):".cyan().bold());
+        println!(
+            "\n{}",
+            "Cached command context (from history):".cyan().bold()
+        );
         if cache_cmds.is_empty() {
             println!("{}", "  No cached commands".yellow());
         } else {

@@ -25,11 +25,17 @@ fn show_status(config: &AppConfig) {
     let db = LearnDb::load(&db_path);
     let stats = db.stats();
 
-    println!("{}", "soon learn - Intelligent Command Prediction".cyan().bold());
+    println!(
+        "{}",
+        "soon learn - Intelligent Command Prediction".cyan().bold()
+    );
     println!();
 
     if stats.total_samples == 0 {
-        println!("{}", "No data yet. Run `soon learn ingest` to start learning.".yellow());
+        println!(
+            "{}",
+            "No data yet. Run `soon learn ingest` to start learning.".yellow()
+        );
         println!();
     } else {
         println!("{}", "Database Status:".bold());
@@ -73,10 +79,7 @@ fn ingest_current(shell: &ShellKind) {
     let db_path = learn::db_path();
     let mut db = LearnDb::load(&db_path);
 
-    println!(
-        "{}",
-        format!("Ingesting history from {}...", shell).cyan()
-    );
+    println!("{}", format!("Ingesting history from {}...", shell).cyan());
 
     let count = pattern::ingest_shell_history(&mut db, shell);
 
@@ -245,31 +248,21 @@ fn predict(shell: &ShellKind, config: &AppConfig, n: usize) {
         return;
     }
 
-    println!(
-        "{}",
-        "Learned Predictions:".magenta().bold()
-    );
-    println!(
-        "  {} {}",
-        "Context:".dimmed(),
-        recent.join(" -> ").dimmed()
-    );
+    println!("{}", "Learned Predictions:".magenta().bold());
+    println!("  {} {}", "Context:".dimmed(), recent.join(" -> ").dimmed());
     println!();
 
     // Fused local prediction
-    let local_preds = pattern::predict_local(
-        &db,
-        &recent,
-        current_dir.as_deref(),
-        config,
-        n,
-    );
+    let local_preds = pattern::predict_local(&db, &recent, current_dir.as_deref(), config, n);
 
     if local_preds.is_empty() {
         // Fall back to Markov chain
         let markov_preds = markov::markov_blend(&db, &recent, n);
         if markov_preds.is_empty() {
-            println!("{}", "  No predictions available yet. Need more data.".yellow());
+            println!(
+                "{}",
+                "  No predictions available yet. Need more data.".yellow()
+            );
         } else {
             println!("{}", "  (Markov chain fallback)".dimmed());
             for (i, (cmd, score)) in markov_preds.iter().enumerate() {
@@ -392,10 +385,7 @@ fn ask_llm(shell: &ShellKind, config: &AppConfig, n: usize) {
                         format!("({}%)", pct).dimmed()
                     );
                     if !pred.reason.is_empty() {
-                        println!(
-                            "     {}",
-                            pred.reason.dimmed()
-                        );
+                        println!("     {}", pred.reason.dimmed());
                     }
                 }
             }
@@ -410,13 +400,8 @@ fn ask_llm(shell: &ShellKind, config: &AppConfig, n: usize) {
     let db = LearnDb::load(&db_path);
     if db.total_samples > 0 {
         let recent_main: Vec<&str> = recent.iter().map(|c| main_cmd(c)).collect();
-        let local_preds = pattern::predict_local(
-            &db,
-            &recent_main,
-            current_dir.as_deref(),
-            config,
-            3,
-        );
+        let local_preds =
+            pattern::predict_local(&db, &recent_main, current_dir.as_deref(), config, 3);
         if !local_preds.is_empty() {
             println!();
             println!("{}", "Local Predictions (for comparison):".dimmed());
@@ -442,10 +427,7 @@ fn reset() {
 
     match std::fs::remove_file(&db_path) {
         Ok(()) => {
-            println!(
-                "{}",
-                "Learn database reset successfully.".green().bold()
-            );
+            println!("{}", "Learn database reset successfully.".green().bold());
         }
         Err(e) => {
             eprintln!("{}", format!("Failed to reset: {}", e).red());
@@ -458,9 +440,6 @@ fn print_quick_stats(db: &LearnDb) {
     let stats = db.stats();
     println!(
         "  {} samples, {} cmds, {} transitions, {} trigrams",
-        stats.total_samples,
-        stats.unique_commands,
-        stats.transition_pairs,
-        stats.trigram_entries
+        stats.total_samples, stats.unique_commands, stats.transition_pairs, stats.trigram_entries
     );
 }

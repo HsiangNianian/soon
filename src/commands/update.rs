@@ -26,10 +26,7 @@ impl std::fmt::Display for InstallChannel {
 
 fn detect_install_channel() -> InstallChannel {
     // Check cargo
-    if let Ok(output) = Command::new("cargo")
-        .args(["install", "--list"])
-        .output()
-    {
+    if let Ok(output) = Command::new("cargo").args(["install", "--list"]).output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if stdout.lines().any(|line| line.starts_with("soon ")) {
@@ -73,8 +70,8 @@ fn get_latest_version() -> Result<String, String> {
         .read_to_string()
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    let body: serde_json::Value = serde_json::from_str(&body_str)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let body: serde_json::Value =
+        serde_json::from_str(&body_str).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     body.get("crate")
         .and_then(|c: &serde_json::Value| c.get("max_version"))
@@ -162,26 +159,15 @@ pub fn run(config: &AppConfig) {
         "Detected install channel:".dimmed(),
         format!("{}", channel).bold()
     );
-    println!(
-        "{} {}",
-        "Current version:".dimmed(),
-        current_version.bold()
-    );
+    println!("{} {}", "Current version:".dimmed(), current_version.bold());
 
     // Check latest version
     match get_latest_version() {
         Ok(latest) => {
-            println!(
-                "{} {}",
-                "Latest version:".dimmed(),
-                latest.bold()
-            );
+            println!("{} {}", "Latest version:".dimmed(), latest.bold());
 
             if latest == current_version {
-                println!(
-                    "\n{}",
-                    "Already up to date!".green().bold()
-                );
+                println!("\n{}", "Already up to date!".green().bold());
                 return;
             }
 
@@ -193,20 +179,14 @@ pub fn run(config: &AppConfig) {
             );
         }
         Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Warning: {}", e).yellow()
-            );
+            eprintln!("{}", format!("Warning: {}", e).yellow());
             println!("{}", "Attempting update anyway...".dimmed());
         }
     }
 
     match do_update(&channel) {
         Ok(()) => {
-            println!(
-                "\n{}",
-                "Update completed successfully!".green().bold()
-            );
+            println!("\n{}", "Update completed successfully!".green().bold());
         }
         Err(e) => {
             eprintln!("{}", format!("Update failed: {}", e).red());

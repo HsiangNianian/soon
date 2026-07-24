@@ -186,8 +186,7 @@ pub fn predict_local(
     // Filter out ignored commands and recently used commands
     let ignored = &config.general.ignored_commands;
     scores.retain(|cmd, _| {
-        !ignored.iter().any(|ig| ig == cmd)
-            && recent_cmds.last().is_none_or(|&last| last != cmd)
+        !ignored.iter().any(|ig| ig == cmd) && recent_cmds.last().is_none_or(|&last| last != cmd)
     });
 
     let mut results: Vec<(String, f64)> = scores.into_iter().collect();

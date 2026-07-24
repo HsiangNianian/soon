@@ -15,7 +15,8 @@ pub fn run(action: Option<ConfigAction>) {
 
 fn show_all() {
     let config = AppConfig::load();
-    let content = toml::to_string_pretty(&config).unwrap_or_else(|_| "Failed to serialize config".to_string());
+    let content = toml::to_string_pretty(&config)
+        .unwrap_or_else(|_| "Failed to serialize config".to_string());
     let path = AppConfig::config_path();
 
     println!("{}", "Current configuration:".cyan().bold());
@@ -38,7 +39,10 @@ fn init_config() {
             "{}",
             format!("Config file already exists: {}", path.display()).yellow()
         );
-        println!("{}", "Use `soon config set <KEY> <VALUE>` to modify values.".dimmed());
+        println!(
+            "{}",
+            "Use `soon config set <KEY> <VALUE>` to modify values.".dimmed()
+        );
         return;
     }
 
@@ -81,10 +85,7 @@ fn set_value(key: &str, value: &str) {
     match config.set_value(key, value) {
         Ok(()) => match config.save() {
             Ok(()) => {
-                println!(
-                    "{}",
-                    format!("{} = {}", key, value).green()
-                );
+                println!("{}", format!("{} = {}", key, value).green());
             }
             Err(e) => {
                 eprintln!("{}", format!("Failed to save config: {}", e).red());

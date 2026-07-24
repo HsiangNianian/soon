@@ -88,10 +88,7 @@ pub fn cosine_similarity(a: &HashMap<String, f32>, b: &HashMap<String, f32>) -> 
 
 /// Build IDF weights from a set of commands.
 pub fn build_idf(commands: &[&str]) -> HashMap<String, f32> {
-    let corpus: Vec<HashMap<String, f32>> = commands
-        .iter()
-        .map(|cmd| tf(&trigrams(cmd)))
-        .collect();
+    let corpus: Vec<HashMap<String, f32>> = commands.iter().map(|cmd| tf(&trigrams(cmd))).collect();
     idf(&corpus)
 }
 
