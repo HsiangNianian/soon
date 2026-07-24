@@ -1,11 +1,14 @@
 use crate::cli::EventsAction;
 use crate::config::AppConfig;
 use crate::events::{self, CommandEvent, SuggestionEvent, SuggestionOutcome, SCHEMA_VERSION};
+use crate::history_import;
+use crate::shell::{self, ShellKind};
 
 pub fn run(action: EventsAction, config: &AppConfig) {
     match action {
         EventsAction::Inspect => inspect(config.events.retention),
         EventsAction::Clear { yes } => clear(yes),
+        EventsAction::ImportZsh { path, preview } => import_zsh(path, preview, config),
         EventsAction::RecordCommand {
             id,
             command,
@@ -20,10 +23,10 @@ pub fn run(action: EventsAction, config: &AppConfig) {
                 schema_version: SCHEMA_VERSION,
                 id,
                 command,
-                cwd,
-                started_at_ms,
-                duration_ms,
-                exit_code,
+                cwd: Some(cwd),
+                started_at_ms: Some(started_at_ms),
+                duration_ms: Some(duration_ms),
+                exit_code: Some(exit_code),
                 shell,
                 previous_event_id: previous_id,
             },
@@ -56,6 +59,36 @@ pub fn run(action: EventsAction, config: &AppConfig) {
                 config,
             );
         }
+    }
+}
+
+fn import_zsh(mut paths: Vec<std::path::PathBuf>, preview: bool, config: &AppConfig) {
+    if paths.is_empty() {
+        let Some(default_path) = shell::history_path(&ShellKind::Zsh) else {
+            eprintln!("Could not resolve the default Zsh history path");
+            std::process::exit(1);
+        };
+        paths.push(default_path);
+    }
+
+    let stats = history_import::import_zsh(&paths, config, preview).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(1);
+    });
+    println!(
+        "Zsh history import{}",
+        if preview { " preview" } else { "" }
+    );
+    println!("Files: {}", stats.files);
+    println!("Importable entries: {}", stats.importable);
+    println!("Sensitive entries skipped: {}", stats.sensitive);
+    println!("Malformed entries skipped: {}", stats.malformed);
+    println!("Duplicate entries skipped: {}", stats.duplicates);
+    println!("Already imported: {}", stats.already_imported);
+    if preview {
+        println!("Would import: {}", stats.would_import());
+    } else {
+        println!("Imported: {}", stats.imported);
     }
 }
 

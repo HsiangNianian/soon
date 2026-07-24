@@ -111,9 +111,9 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 | Current source | v0.4 target |
 |---|---|
 | On-demand command plus opt-in Zsh loop | Coherent beta install and clean-session smoke test |
-| Manual, successful-command Next-step, and failed-command Repair triggers | Useful cold starts from a safe history import |
+| Manual, successful-command Next-step, and failed-command Repair triggers | Clean-session lifecycle regression coverage |
 | Retained command and suggestion events with feedback | Local replay quality and latency metrics |
-| Built-in and user-configured sensitive-command filters | A documented v0.4 privacy and release audit |
+| Sensitive-command filters plus idempotent Zsh history import | A documented v0.4 privacy and release audit |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
 
@@ -129,7 +129,7 @@ This baseline is deliberately simple. A more complex ranker must beat it on the 
 
 ## Agent roadmap
 
-The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) adds safe command lifecycle events and three prediction triggers: explicit `soon`, Next-step after success, and Repair after failure.
+The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, and a private history-import path. The remaining gate is measured local replay plus a coherent beta release.
 
 The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) then measures a contextual probabilistic ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) before adding opt-in local-model and OpenAI-compatible candidate sources in [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
@@ -175,6 +175,24 @@ soon config set events.retention 5000
 soon events clear --yes
 ```
 
+Give a fresh profile useful event memory by previewing a Zsh history import first:
+
+```bash
+# Uses ~/.zsh_history
+soon events import-zsh --preview
+soon events import-zsh
+
+# Or pass current and rotated files explicitly, oldest first
+soon events import-zsh --preview \
+  --path ~/.zsh_history.1 \
+  --path ~/.zsh_history
+soon events import-zsh \
+  --path ~/.zsh_history.1 \
+  --path ~/.zsh_history
+```
+
+Plain command-per-line history and Zsh extended history (`: <epoch>:<duration>;<command>`) are supported. Extended timestamps and durations are preserved; unavailable cwd, exit status, and plain-history timestamps remain unknown. Preview and import summaries report importable, sensitive, malformed, duplicate, and already-imported counts without printing command text. Stable event IDs make repeated imports idempotent, including identical rotated files.
+
 Config lives at `~/.config/soon/config.toml`:
 
 ```bash
@@ -193,7 +211,7 @@ soon init zsh           Print the opt-in Zsh integration
 soon stats              Show the most-used executables
 soon which              Show shell and history diagnostics
 soon config             View or change local configuration
-soon events             Inspect or clear local agent events
+soon events             Inspect, clear, or import local agent events
 soon learn              Use the experimental learning tools
 soon update             Check the configured release channel
 ```
