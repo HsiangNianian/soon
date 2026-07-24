@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::privacy;
 
 /// LLM-enhanced prediction.
-/// Sends context (recent commands, current dir, time) to a configured LLM
+/// Sends filtered context (recent commands and current directory) to a configured LLM
 /// and parses the JSON response for command predictions.
 pub struct LlmPrediction {
     pub command: String,
