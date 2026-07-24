@@ -61,6 +61,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: EventsAction,
     },
+    /// Measure local prediction quality with chronological event replay
+    Replay,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -119,6 +121,9 @@ pub enum EventsAction {
         outcome: String,
         #[arg(long)]
         latency_ms: f64,
+        /// Outcome of an optional model attempt (used by prediction providers)
+        #[arg(long)]
+        model_outcome: Option<String>,
     },
 }
 
