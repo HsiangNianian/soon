@@ -78,7 +78,7 @@ The last background prediction latency is available without printing command con
 print -r -- "$SOON_LAST_LATENCY_MS ms"
 ```
 
-PyPI and AUR distribution are being reconciled as part of the [v0.4 release issue](https://github.com/HsiangNianian/soon/issues/12) and are not advertised as primary channels for this prototype.
+PyPI and AUR distributions are being reconciled as part of the [v0.4 release issue](https://github.com/HsiangNianian/soon/issues/12) and are not advertised as primary channels for this prototype.
 
 ## Use the current prototype
 
@@ -129,7 +129,7 @@ This baseline is deliberately simple. A more complex ranker must beat it on the 
 
 `soon`, `soon now`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
 
-The current integration honors configured ignored executables and refuses multiline/control-character output, but the broader sensitive-command filter tracked in [#9](https://github.com/HsiangNianian/soon/issues/9) is not shipped yet. Treat this source build as a prototype on histories that may contain inline credentials.
+The current integration honors configured ignored executables and refuses multiline/control-character output, but the broader sensitive-command filter tracked in [#9](https://github.com/HsiangNianian/soon/issues/9) is not shipped yet. Treat this source build as a prototype for histories that may contain inline credentials.
 
 `soon learn ask` is different: it is an optional experimental path that sends recent command context, the current directory, and time context to the OpenAI-compatible or Ollama endpoint you configure. API credentials are currently stored in the local config file. Do not enable remote enrichment for sensitive histories; safer capture, filtering, and credential guidance are tracked in [#9](https://github.com/HsiangNianian/soon/issues/9).
 
