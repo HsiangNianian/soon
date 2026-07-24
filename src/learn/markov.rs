@@ -18,11 +18,7 @@ pub fn markov_order2(db: &LearnDb, prev: &str, current: &str, n: usize) -> Vec<(
 
 /// Weighted Markov blend: combine order-1 and order-2 predictions.
 /// Order-2 is weighted more heavily when available since it has more context.
-pub fn markov_blend(
-    db: &LearnDb,
-    recent_cmds: &[&str],
-    n: usize,
-) -> Vec<(String, f64)> {
+pub fn markov_blend(db: &LearnDb, recent_cmds: &[&str], n: usize) -> Vec<(String, f64)> {
     let mut scores: HashMap<String, f64> = HashMap::new();
 
     // Order-2 (higher weight)

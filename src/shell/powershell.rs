@@ -30,11 +30,7 @@ pub fn psreadline_history_path() -> PathBuf {
 
     // Linux and fallback
     let data_dir = dirs::data_dir()
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join(".local/share")
-        });
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/share"));
 
     data_dir
         .join("powershell")
@@ -44,7 +40,10 @@ pub fn psreadline_history_path() -> PathBuf {
 
 /// Parse PowerShell PSReadLine history (plain text, one command per line).
 /// Multi-line commands use backtick continuation.
-pub fn parse_powershell_history<R: Read>(reader: std::io::BufReader<R>, result: &mut Vec<HistoryItem>) {
+pub fn parse_powershell_history<R: Read>(
+    reader: std::io::BufReader<R>,
+    result: &mut Vec<HistoryItem>,
+) {
     let mut continuation = String::new();
 
     for line in reader.lines().map_while(Result::ok) {
@@ -65,10 +64,7 @@ pub fn parse_powershell_history<R: Read>(reader: std::io::BufReader<R>, result: 
         };
 
         if !cmd.is_empty() {
-            result.push(HistoryItem {
-                cmd,
-                path: None,
-            });
+            result.push(HistoryItem { cmd, path: None });
         }
     }
 

@@ -16,13 +16,14 @@ jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
           - runner: ubuntu-22.04
             target: x86
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04-arm
             target: aarch64
           - runner: ubuntu-22.04
             target: armv7
@@ -31,7 +32,7 @@ jobs:
           - runner: ubuntu-22.04
             target: ppc64le
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -59,7 +60,7 @@ jobs:
           - runner: ubuntu-22.04
             target: armv7
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -83,7 +84,7 @@ jobs:
           - runner: windows-latest
             target: x86
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -104,7 +105,7 @@ jobs:
           - runner: macos-14
             target: aarch64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -120,7 +121,7 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:

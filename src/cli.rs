@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(
     name = "soon",
-    about = "Predict your next shell command based on history",
+    about = "Predict your next full shell command from local history",
     version
 )]
 pub struct Cli {

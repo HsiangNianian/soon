@@ -15,11 +15,7 @@ pub fn is_configured(config: &AppConfig) -> bool {
 }
 
 /// Build the prompt for the LLM.
-fn build_prompt(
-    recent_cmds: &[&str],
-    current_dir: Option<&str>,
-    custom_prompt: &str,
-) -> String {
+fn build_prompt(recent_cmds: &[&str], current_dir: Option<&str>, custom_prompt: &str) -> String {
     let cmds_str = recent_cmds.join("\n");
     let dir_str = current_dir.unwrap_or("unknown");
 
@@ -86,10 +82,7 @@ pub fn predict(
     let mut req = ureq::post(&url).header("Content-Type", "application/json");
 
     if !config.llm.api_key.is_empty() {
-        req = req.header(
-            "Authorization",
-            &format!("Bearer {}", config.llm.api_key),
-        );
+        req = req.header("Authorization", &format!("Bearer {}", config.llm.api_key));
     }
 
     let mut response = req
