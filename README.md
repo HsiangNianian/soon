@@ -111,9 +111,9 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 | Current source | v0.4 target |
 |---|---|
 | On-demand command plus opt-in Zsh loop | Coherent beta install and clean-session smoke test |
-| Background ghost suggestion with `Ctrl-F` acceptance | Manual, successful-command Next-step, and failed-command Repair triggers |
-| Deterministic frequency and recency ranking | Safe command and suggestion events with feedback |
-| Local config plus experimental learning tools | Sensitive-command controls and local replay metrics |
+| Manual, successful-command Next-step, and failed-command Repair triggers | Useful cold starts from a safe history import |
+| Retained command and suggestion events with feedback | Local replay quality and latency metrics |
+| Built-in and user-configured sensitive-command filters | A documented v0.4 privacy and release audit |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
 
@@ -137,9 +137,30 @@ The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milest
 
 `soon`, `soon now`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
 
-The current integration honors configured ignored executables and refuses multiline/control-character output, but the broader sensitive-command filter tracked in [#9](https://github.com/HsiangNianian/soon/issues/9) is not shipped yet. Treat this source build as a prototype for histories that may contain inline credentials.
+The current source rejects likely inline API keys, tokens, authorization headers, password flags, private-key material, and known credential prefixes before storing a command or suggestion. It applies the same filter again before ranking or rendering shell history, old event data, legacy learn data, provider context, and model output. Rejections report a category, not the command text.
 
-`soon learn ask` is different: it is an optional experimental path that sends recent command context, the current directory, and time context to the OpenAI-compatible or Ollama endpoint you configure. API credentials are currently stored in the local config file. Do not enable remote enrichment for sensitive histories; safer capture, filtering, and credential guidance are tracked in [#9](https://github.com/HsiangNianian/soon/issues/9).
+Add exact case-sensitive exclusions or regular-expression exclusions without editing stored data:
+
+```bash
+soon config set privacy.excluded_literals 'company-deploy --production'
+soon config set privacy.excluded_patterns '(?i)^kubectl .*--context production'
+```
+
+Comma-separated values configure more than one exclusion. Literal values are redacted from `soon config`, `config get`, and successful `config set` output. Invalid regular expressions are rejected before the configuration is saved.
+
+`soon learn ask` is different: it is an optional experimental path that sends only filtered recent commands and the current directory to the OpenAI-compatible or Ollama endpoint you configure. It does not send event IDs, exit codes, feedback, stdout, or stderr. Model candidates pass through the same local filter before display.
+
+Provider credentials are read at request time from an environment variable and are never stored or printed by soon. The default variable is `SOON_LLM_API_KEY`; configure a different variable name with `llm.api_key_env`. For example, this Zsh flow keeps the value out of shell history:
+
+```zsh
+soon config set llm.provider openai
+soon config set llm.api_url https://api.openai.com
+read -rs 'SOON_LLM_API_KEY?API key: '
+print
+export SOON_LLM_API_KEY
+```
+
+Ollama can run without a credential. The legacy `llm.api_key` setting is rejected.
 
 The Zsh lifecycle integration stores local command and suggestion events in a retained JSONL log under the operating system's application-data directory. Inspect its exact path, schema version, retention, and aggregate counts without printing command text:
 
