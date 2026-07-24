@@ -1,7 +1,8 @@
 use crate::config::AppConfig;
+use crate::privacy;
 
 /// LLM-enhanced prediction.
-/// Sends context (recent commands, current dir, time) to a configured LLM
+/// Sends filtered context (recent commands and current directory) to a configured LLM
 /// and parses the JSON response for command predictions.
 pub struct LlmPrediction {
     pub command: String,
@@ -15,9 +16,21 @@ pub fn is_configured(config: &AppConfig) -> bool {
 }
 
 /// Build the prompt for the LLM.
-fn build_prompt(recent_cmds: &[&str], current_dir: Option<&str>, custom_prompt: &str) -> String {
-    let cmds_str = recent_cmds.join("\n");
-    let dir_str = current_dir.unwrap_or("unknown");
+fn build_prompt(
+    config: &AppConfig,
+    recent_cmds: &[&str],
+    current_dir: Option<&str>,
+    custom_prompt: &str,
+) -> String {
+    let cmds_str = recent_cmds
+        .iter()
+        .copied()
+        .filter(|command| privacy::rejection_reason(command, config).is_none())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let dir_str = current_dir
+        .filter(|directory| privacy::rejection_reason(directory, config).is_none())
+        .unwrap_or("unknown");
 
     if !custom_prompt.is_empty() {
         return custom_prompt
@@ -51,7 +64,7 @@ pub fn predict(
         return Err("LLM not configured. Use `soon config set llm.provider <provider>` and `soon config set llm.api_url <url>`.".to_string());
     }
 
-    let prompt = build_prompt(recent_cmds, current_dir, &config.llm.prompt);
+    let prompt = build_prompt(config, recent_cmds, current_dir, &config.llm.prompt);
 
     let api_url = config.llm.api_url.trim_end_matches('/');
     let url = match config.llm.provider.as_str() {
@@ -81,8 +94,10 @@ pub fn predict(
 
     let mut req = ureq::post(&url).header("Content-Type", "application/json");
 
-    if !config.llm.api_key.is_empty() {
-        req = req.header("Authorization", &format!("Bearer {}", config.llm.api_key));
+    if let Ok(api_key) = std::env::var(&config.llm.api_key_env) {
+        if !api_key.is_empty() {
+            req = req.header("Authorization", &format!("Bearer {api_key}"));
+        }
     }
 
     let mut response = req
@@ -101,7 +116,7 @@ pub fn predict(
     let content = extract_content(&body, &config.llm.provider)?;
 
     // Parse predictions from the content
-    parse_predictions(&content)
+    parse_predictions(config, &content)
 }
 
 /// Extract the message content from different API response formats.
@@ -127,7 +142,7 @@ fn extract_content(body: &serde_json::Value, provider: &str) -> Result<String, S
 }
 
 /// Parse predictions from the LLM's JSON output.
-fn parse_predictions(content: &str) -> Result<Vec<LlmPrediction>, String> {
+fn parse_predictions(config: &AppConfig, content: &str) -> Result<Vec<LlmPrediction>, String> {
     // Try to find JSON in the content (LLM might wrap it in markdown etc.)
     let json_str = extract_json_block(content);
 
@@ -156,7 +171,10 @@ fn parse_predictions(content: &str) -> Result<Vec<LlmPrediction>, String> {
             .unwrap_or("")
             .to_string();
 
-        if !command.is_empty() {
+        if !command.is_empty()
+            && !command.chars().any(char::is_control)
+            && privacy::rejection_reason(&command, config).is_none()
+        {
             results.push(LlmPrediction {
                 command,
                 confidence,
@@ -191,4 +209,148 @@ fn extract_json_block(s: &str) -> &str {
         }
     }
     s.trim()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::thread;
+
+    #[test]
+    fn provider_prompt_omits_sensitive_history() {
+        let prompt = build_prompt(
+            &AppConfig::default(),
+            &[
+                "cargo test --workspace",
+                "export API_TOKEN=history-secret-value",
+            ],
+            Some("/tmp/soon-project"),
+            "",
+        );
+
+        assert!(prompt.contains("cargo test --workspace"), "{prompt}");
+        assert!(!prompt.contains("history-secret-value"), "{prompt}");
+        assert!(!prompt.contains("export API_TOKEN"), "{prompt}");
+    }
+
+    #[test]
+    fn sensitive_model_candidates_are_rejected_before_rendering() {
+        let content = r#"{
+            "predictions": [
+                {"command":"deploy --token model-secret-value","confidence":0.9,"reason":"unsafe"},
+                {"command":"cargo test --workspace","confidence":0.8,"reason":"safe"}
+            ]
+        }"#;
+
+        let predictions =
+            parse_predictions(&AppConfig::default(), content).expect("parse model response");
+
+        assert_eq!(predictions.len(), 1);
+        assert_eq!(predictions[0].command, "cargo test --workspace");
+    }
+
+    #[test]
+    fn provider_request_uses_filtered_payload_and_environment_credential() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock provider");
+        let address = listener.local_addr().expect("mock provider address");
+        let (request_tx, request_rx) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept provider request");
+            let request = read_http_request(&mut stream);
+            request_tx.send(request).expect("capture provider request");
+
+            let model_content = serde_json::json!({
+                "predictions": [
+                    {
+                        "command": "deploy --token model-secret-value",
+                        "confidence": 0.9,
+                        "reason": "unsafe"
+                    },
+                    {
+                        "command": "cargo test --workspace",
+                        "confidence": 0.8,
+                        "reason": "safe"
+                    }
+                ]
+            })
+            .to_string();
+            let body = serde_json::json!({
+                "choices": [{"message": {"content": model_content}}]
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .expect("write mock provider response");
+        });
+
+        let mut config = AppConfig::default();
+        config.llm.provider = "openai".to_string();
+        config.llm.api_url = format!("http://{address}");
+        config.llm.model = "test-model".to_string();
+        config.llm.api_key_env = format!("SOON_TEST_API_KEY_{}", std::process::id());
+        std::env::set_var(&config.llm.api_key_env, "provider-credential-value");
+
+        let predictions = predict(
+            &config,
+            &[
+                "cargo test --workspace",
+                "export API_TOKEN=history-secret-value",
+            ],
+            Some("/tmp/soon-project"),
+            3,
+        )
+        .expect("request predictions from mock provider");
+        std::env::remove_var(&config.llm.api_key_env);
+        let request = request_rx.recv().expect("receive provider request");
+        server.join().expect("join mock provider");
+
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("authorization: bearer provider-credential-value"),
+            "{request}"
+        );
+        assert!(request.contains("cargo test --workspace"), "{request}");
+        assert!(!request.contains("history-secret-value"), "{request}");
+        assert_eq!(predictions.len(), 1);
+        assert_eq!(predictions[0].command, "cargo test --workspace");
+    }
+
+    fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+        let mut request = Vec::new();
+        let mut chunk = [0_u8; 4096];
+        loop {
+            let read = stream.read(&mut chunk).expect("read provider request");
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&chunk[..read]);
+
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        String::from_utf8(request).expect("UTF-8 provider request")
+    }
 }

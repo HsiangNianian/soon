@@ -95,7 +95,7 @@ pub fn run(
         println!("  Shell: {}", shell);
         println!("  History commands: {}", history.len());
         if let Some(last) = history.last() {
-            println!("  Last history command: {}", last.cmd);
+            println!("  Last history executable: {}", main_cmd(&last.cmd));
         }
         println!("  Learn DB samples: {}", db.total_samples);
 

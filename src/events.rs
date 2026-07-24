@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::config::AppConfig;
 use crate::predict::{is_ignored_command, main_cmd};
+use crate::privacy;
 
 pub const SCHEMA_VERSION: u8 = 1;
 
@@ -90,17 +91,23 @@ pub fn event_store_path() -> PathBuf {
         .join("events.jsonl")
 }
 
-pub fn record_command(event: CommandEvent, retention: usize) -> Result<(), String> {
+pub fn record_command(event: CommandEvent, config: &AppConfig) -> Result<(), String> {
     if event.command.trim().is_empty() || event.command.chars().any(char::is_control) {
         return Err("Refusing to store an empty command or control characters".to_string());
     }
+    if let Some(reason) = privacy::rejection_reason(&event.command, config) {
+        return Err(format!("Refusing to store sensitive command: {reason}"));
+    }
 
-    append(&StoredEvent::Command(event), retention)
+    append(&StoredEvent::Command(event), config.events.retention)
 }
 
-pub fn record_suggestion(event: SuggestionEvent, retention: usize) -> Result<(), String> {
+pub fn record_suggestion(event: SuggestionEvent, config: &AppConfig) -> Result<(), String> {
     if event.command.trim().is_empty() || event.command.chars().any(char::is_control) {
         return Err("Refusing to store an empty suggestion or control characters".to_string());
+    }
+    if let Some(reason) = privacy::rejection_reason(&event.command, config) {
+        return Err(format!("Refusing to store sensitive suggestion: {reason}"));
     }
     if !matches!(event.trigger.as_str(), "manual" | "next-step" | "repair") {
         return Err(format!("Unknown prediction trigger: {}", event.trigger));
@@ -111,7 +118,7 @@ pub fn record_suggestion(event: SuggestionEvent, retention: usize) -> Result<(),
     {
         return Err("Invalid suggestion source or latency".to_string());
     }
-    append(&StoredEvent::Suggestion(event), retention)
+    append(&StoredEvent::Suggestion(event), config.events.retention)
 }
 
 pub fn inspect() -> EventStats {
@@ -175,6 +182,7 @@ pub fn predict_after(
             continue;
         };
         if next.command.chars().any(char::is_control)
+            || privacy::rejection_reason(&next.command, config).is_some()
             || is_ignored_command(main_cmd(&next.command), config)
         {
             continue;

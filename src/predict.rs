@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::AppConfig;
+use crate::privacy;
 use crate::shell::HistoryItem;
 
 #[derive(Debug, Default)]
@@ -78,7 +79,10 @@ pub fn predict_next_command(
         if match_ratio >= 0.4 && next_idx < history_len {
             let next_cmd = history[next_idx].cmd.trim();
 
-            if !next_cmd.is_empty() && !is_ignored_command(main_cmd(next_cmd), config) {
+            if !next_cmd.is_empty()
+                && privacy::rejection_reason(next_cmd, config).is_none()
+                && !is_ignored_command(main_cmd(next_cmd), config)
+            {
                 let weighted_score = match_ratio * position_weight;
                 let entry = candidates.entry(next_cmd).or_default();
                 entry.total += weighted_score;
@@ -229,5 +233,30 @@ mod tests {
         let prediction = predict_next_command(&history, 1, &["git".to_string()], &config, false);
 
         assert_eq!(prediction, None);
+    }
+
+    #[test]
+    fn rejects_sensitive_candidates_loaded_from_shell_history() {
+        let history = vec![
+            item("git status"),
+            item("export API_TOKEN=secret-history-value"),
+            item("echo separator"),
+            item("git diff"),
+            item("export API_TOKEN=secret-history-value"),
+            item("echo another-separator"),
+            item("git log"),
+            item("cargo test --workspace"),
+            item("echo done"),
+        ];
+
+        let prediction = predict_next_command(
+            &history,
+            1,
+            &["git".to_string()],
+            &config_without_ignores(),
+            false,
+        );
+
+        assert_eq!(prediction.as_deref(), Some("cargo test --workspace"));
     }
 }

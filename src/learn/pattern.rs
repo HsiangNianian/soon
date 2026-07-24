@@ -3,12 +3,13 @@ use chrono::{Datelike, Local};
 use crate::config::AppConfig;
 use crate::learn::db::LearnDb;
 use crate::learn::trigram;
-use crate::predict::main_cmd;
+use crate::predict::{is_ignored_command, main_cmd};
+use crate::privacy;
 use crate::shell::{self, HistoryItem, ShellKind};
 
 /// Ingest history from a single shell into the learn database.
 /// Returns the number of new entries ingested.
-pub fn ingest_shell_history(db: &mut LearnDb, shell: &ShellKind) -> usize {
+pub fn ingest_shell_history(db: &mut LearnDb, shell: &ShellKind, config: &AppConfig) -> usize {
     let history = shell::load_history(shell);
     if history.is_empty() {
         return 0;
@@ -22,7 +23,7 @@ pub fn ingest_shell_history(db: &mut LearnDb, shell: &ShellKind) -> usize {
     }
 
     let new_entries = &history[cursor..];
-    let count = ingest_entries(db, new_entries);
+    let count = ingest_entries(db, new_entries, config);
 
     db.shell_cursors.insert(shell_name, history.len());
     count
@@ -30,7 +31,7 @@ pub fn ingest_shell_history(db: &mut LearnDb, shell: &ShellKind) -> usize {
 
 /// Ingest history from ALL known shells.
 #[allow(dead_code)]
-pub fn ingest_all_shells(db: &mut LearnDb) -> usize {
+pub fn ingest_all_shells(db: &mut LearnDb, config: &AppConfig) -> usize {
     let shells = [
         ShellKind::Bash,
         ShellKind::Zsh,
@@ -47,14 +48,14 @@ pub fn ingest_all_shells(db: &mut LearnDb) -> usize {
             .map(|p| p.exists())
             .unwrap_or(false)
         {
-            total += ingest_shell_history(db, shell);
+            total += ingest_shell_history(db, shell, config);
         }
     }
     total
 }
 
 /// Core ingestion: process a slice of HistoryItems and record patterns.
-fn ingest_entries(db: &mut LearnDb, entries: &[HistoryItem]) -> usize {
+fn ingest_entries(db: &mut LearnDb, entries: &[HistoryItem], config: &AppConfig) -> usize {
     if entries.is_empty() {
         return 0;
     }
@@ -63,14 +64,23 @@ fn ingest_entries(db: &mut LearnDb, entries: &[HistoryItem]) -> usize {
     let hour = now.format("%H").to_string().parse::<u8>().unwrap_or(0);
     let weekday = now.weekday().num_days_from_monday() as u8;
 
-    let cmds: Vec<&str> = entries.iter().map(|e| main_cmd(&e.cmd)).collect();
+    let cmds: Vec<Option<&str>> = entries
+        .iter()
+        .map(|entry| {
+            if privacy::rejection_reason(&entry.cmd, config).is_some() {
+                None
+            } else {
+                let command = main_cmd(&entry.cmd);
+                (!command.is_empty()).then_some(command)
+            }
+        })
+        .collect();
     let mut count = 0;
 
     for i in 0..cmds.len() {
-        let cmd = cmds[i];
-        if cmd.is_empty() {
+        let Some(cmd) = cmds[i] else {
             continue;
-        }
+        };
 
         // Time and weekday patterns
         db.record_time_pattern(hour, cmd);
@@ -84,13 +94,18 @@ fn ingest_entries(db: &mut LearnDb, entries: &[HistoryItem]) -> usize {
         }
 
         // Single transition: cmds[i] -> cmds[i+1]
-        if i + 1 < cmds.len() && !cmds[i + 1].is_empty() {
-            db.record_transition(cmd, cmds[i + 1]);
+        if let Some(next) = cmds.get(i + 1).copied().flatten() {
+            db.record_transition(cmd, next);
         }
 
         // Bigram transition: (cmds[i-1], cmds[i]) -> cmds[i+1]
-        if i >= 1 && i + 1 < cmds.len() && !cmds[i + 1].is_empty() {
-            db.record_bigram_transition(cmds[i - 1], cmd, cmds[i + 1]);
+        if i >= 1 {
+            if let (Some(previous), Some(next)) = (
+                cmds.get(i - 1).copied().flatten(),
+                cmds.get(i + 1).copied().flatten(),
+            ) {
+                db.record_bigram_transition(previous, cmd, next);
+            }
         }
 
         count += 1;
@@ -184,13 +199,56 @@ pub fn predict_local(
     }
 
     // Filter out ignored commands and recently used commands
-    let ignored = &config.general.ignored_commands;
     scores.retain(|cmd, _| {
-        !ignored.iter().any(|ig| ig == cmd) && recent_cmds.last().is_none_or(|&last| last != cmd)
+        privacy::rejection_reason(cmd, config).is_none()
+            && !is_ignored_command(main_cmd(cmd), config)
+            && recent_cmds.last().is_none_or(|&last| last != cmd)
     });
 
     let mut results: Vec<(String, f64)> = scores.into_iter().collect();
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     results.truncate(n);
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_sensitive_candidates_already_present_in_the_learn_database() {
+        let mut db = LearnDb::default();
+        db.record_transition("git", "deploy --token legacy-secret-value");
+        db.record_transition("git", "cargo test --workspace");
+
+        let predictions = predict_local(&db, &["git"], None, &AppConfig::default(), 3);
+
+        assert_eq!(
+            predictions
+                .iter()
+                .map(|(command, _)| command.as_str())
+                .collect::<Vec<_>>(),
+            vec!["cargo test --workspace"]
+        );
+    }
+
+    #[test]
+    fn skips_sensitive_history_entries_before_learning_patterns() {
+        let mut db = LearnDb::default();
+        let entries = vec![
+            HistoryItem {
+                cmd: "export API_TOKEN=secret-history-value".to_string(),
+                path: Some("/tmp/soon-project".to_string()),
+            },
+            HistoryItem {
+                cmd: "cargo test --workspace".to_string(),
+                path: Some("/tmp/soon-project".to_string()),
+            },
+        ];
+
+        let ingested = ingest_entries(&mut db, &entries, &AppConfig::default());
+
+        assert_eq!(ingested, 1);
+        assert_eq!(db.total_samples, 1);
+    }
 }
