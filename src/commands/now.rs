@@ -5,10 +5,16 @@ use crate::cache;
 use crate::config::AppConfig;
 use crate::learn::{self, db::LearnDb, pattern};
 use crate::predict::{self, main_cmd};
-use crate::shell::{self, ShellKind};
+use crate::shell::{self, HistoryItem, ShellKind};
 
-pub fn run(shell: &ShellKind, ngram: usize, config: &AppConfig, debug: bool) {
-    cache::overwrite_soon_cache_from_history(shell, ngram);
+pub fn run(
+    shell: &ShellKind,
+    ngram: usize,
+    config: &AppConfig,
+    debug: bool,
+    raw: bool,
+    after: Option<&str>,
+) {
     let history = shell::load_history(shell);
     if history.is_empty() {
         eprintln!(
@@ -18,8 +24,21 @@ pub fn run(shell: &ShellKind, ngram: usize, config: &AppConfig, debug: bool) {
         std::process::exit(1);
     }
 
-    let cache_cmds = cache::read_soon_cache(ngram);
-    let suggestion = predict::predict_next_command(&history, ngram, &cache_cmds, config, debug);
+    let cache_cmds = if raw {
+        recent_context(&history, ngram, after)
+    } else {
+        cache::overwrite_soon_cache_from_history(shell, ngram);
+        cache::read_soon_cache(ngram)
+    };
+    let suggestion =
+        predict::predict_next_command(&history, ngram, &cache_cmds, config, debug && !raw);
+
+    if raw {
+        if let Some(cmd) = suggestion.filter(|cmd| !cmd.chars().any(char::is_control)) {
+            println!("{cmd}");
+        }
+        return;
+    }
 
     println!("\n{}", "You might run next:".magenta().bold());
     match suggestion {
@@ -76,4 +95,24 @@ pub fn run(shell: &ShellKind, ngram: usize, config: &AppConfig, debug: bool) {
             }
         }
     }
+}
+
+fn recent_context(history: &[HistoryItem], ngram: usize, after: Option<&str>) -> Vec<String> {
+    let context_len = ngram.max(1);
+    let history_len = context_len.saturating_sub(usize::from(after.is_some()));
+    let mut commands: Vec<String> = history
+        .iter()
+        .rev()
+        .take(history_len)
+        .map(|item| main_cmd(&item.cmd).to_string())
+        .collect();
+    commands.reverse();
+
+    if let Some(command) = after {
+        commands.push(main_cmd(command).to_string());
+    }
+
+    commands.retain(|command| !command.is_empty());
+    commands.dedup();
+    commands
 }

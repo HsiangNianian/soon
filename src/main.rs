@@ -28,6 +28,7 @@ fn main() {
     let ngram = cli.ngram.unwrap_or(config.general.ngram);
 
     match cli.command {
+        Some(Commands::Init { shell }) => commands::init::run(shell),
         Some(Commands::Config { action }) => commands::config::run(action),
         Some(Commands::Update) => commands::update::run(&config),
         Some(Commands::Learn { action }) => {
@@ -42,9 +43,13 @@ fn main() {
             require_known_shell(&shell);
             commands::stats::run(&shell, &config);
         }
-        Some(Commands::Now) | None => {
+        Some(Commands::Now { raw, after }) => {
             require_known_shell(&shell);
-            commands::now::run(&shell, ngram, &config, cli.debug);
+            commands::now::run(&shell, ngram, &config, cli.debug, raw, after.as_deref());
+        }
+        None => {
+            require_known_shell(&shell);
+            commands::now::run(&shell, ngram, &config, cli.debug, false, None);
         }
     }
 }

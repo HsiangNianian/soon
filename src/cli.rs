@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -19,8 +19,20 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Print shell integration code for the current session
+    Init {
+        #[arg(value_enum)]
+        shell: InitShell,
+    },
     /// Show the most likely next command
-    Now,
+    Now {
+        /// Print only the predicted command
+        #[arg(long)]
+        raw: bool,
+        /// Include the command that just started in the prediction context
+        #[arg(long, hide = true, requires = "raw")]
+        after: Option<String>,
+    },
     /// Show most used commands
     Stats,
     /// Learn from command history and predict intelligently
@@ -37,6 +49,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<ConfigAction>,
     },
+}
+
+#[derive(ValueEnum, Debug, Clone)]
+pub enum InitShell {
+    Zsh,
 }
 
 #[derive(Subcommand, Debug, Clone)]

@@ -12,7 +12,7 @@ A local-first experiment that learns recurring shell transitions and predicts th
 
 </div>
 
-> **Prototype status:** the current source predicts a full command on demand. Automatic, zero-input Zsh suggestions are the goal of the [v0.4 milestone](https://github.com/HsiangNianian/soon/milestone/1), not a shipped feature yet.
+> **Prototype status:** the current source includes the first opt-in Zsh ghost-suggestion loop. The published `0.3.0` package still exposes only on-demand prediction; install from Git to test the interactive path before the [v0.4 beta](https://github.com/HsiangNianian/soon/milestone/1).
 
 ## The idea
 
@@ -58,6 +58,26 @@ To try the current repository behavior before the next release:
 cargo install --git https://github.com/HsiangNianian/soon
 ```
 
+Enable the integration for the current Zsh session:
+
+```zsh
+eval "$(soon init zsh)"
+```
+
+At an empty prompt, soon computes in the background and renders one dim full-command suggestion. Press `Ctrl-F` to place it in the editable buffer, or start typing to ignore it. `Ctrl-F` keeps its previous behavior when no suggestion is visible.
+
+To enable it in future sessions, add the same `eval` line to `~/.zshrc`. To remove the hooks and restore the previous `Ctrl-F` binding in the current session, run:
+
+```zsh
+soon-disable
+```
+
+The last background prediction latency is available without printing command content:
+
+```zsh
+print -r -- "$SOON_LAST_LATENCY_MS ms"
+```
+
 PyPI and AUR distribution are being reconciled as part of the [v0.4 release issue](https://github.com/HsiangNianian/soon/issues/12) and are not advertised as primary channels for this prototype.
 
 ## Use the current prototype
@@ -88,11 +108,10 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 
 | Current source | v0.4 target |
 |---|---|
-| On-demand `soon` command | Empty-prompt Zsh ghost suggestion |
-| Full-command candidates from local history | One-key acceptance without disrupting shell editing |
-| Deterministic frequency and recency ranking | Working-directory and exit-status context |
-| Local config and diagnostics | Sensitive-command filtering, inspect, and clear controls |
-| Experimental learned and LLM subcommands | Local replay metrics and a measured latency budget |
+| On-demand command plus opt-in Zsh loop | Coherent beta install and clean-session smoke test |
+| Background ghost suggestion with `Ctrl-F` acceptance | Contextual events with directory and exit status |
+| Deterministic frequency and recency ranking | Sensitive-command filtering, inspect, and clear controls |
+| Local config plus experimental learning tools | Local replay metrics and a measured latency budget |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Predictive Shell Project](https://github.com/users/HsiangNianian/projects/7).
 
@@ -108,7 +127,9 @@ This baseline is deliberately simple. A more complex ranker must beat it on the 
 
 ## Privacy
 
-`soon`, `soon now`, `soon which`, and the local learning commands read files on your machine and do not require a network service.
+`soon`, `soon now`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
+
+The current integration honors configured ignored executables and refuses multiline/control-character output, but the broader sensitive-command filter tracked in [#9](https://github.com/HsiangNianian/soon/issues/9) is not shipped yet. Treat this source build as a prototype on histories that may contain inline credentials.
 
 `soon learn ask` is different: it is an optional experimental path that sends recent command context, the current directory, and time context to the OpenAI-compatible or Ollama endpoint you configure. API credentials are currently stored in the local config file. Do not enable remote enrichment for sensitive histories; safer capture, filtering, and credential guidance are tracked in [#9](https://github.com/HsiangNianian/soon/issues/9).
 
@@ -126,6 +147,7 @@ soon config set general.ngram 5
 ```text
 soon                    Predict the next full command
 soon now                Run the same prediction explicitly
+soon init zsh           Print the opt-in Zsh integration
 soon stats              Show the most-used executables
 soon which              Show shell and history diagnostics
 soon config             View or change local configuration
