@@ -2,6 +2,7 @@ mod cache;
 mod cli;
 mod commands;
 mod config;
+mod events;
 mod learn;
 mod predict;
 mod shell;
@@ -30,6 +31,7 @@ fn main() {
     match cli.command {
         Some(Commands::Init { shell }) => commands::init::run(shell),
         Some(Commands::Config { action }) => commands::config::run(action),
+        Some(Commands::Events { action }) => commands::events::run(action, &config),
         Some(Commands::Update) => commands::update::run(&config),
         Some(Commands::Learn { action }) => {
             // Learn works even with unknown shell (ingest-all detects automatically)
@@ -43,13 +45,36 @@ fn main() {
             require_known_shell(&shell);
             commands::stats::run(&shell, &config);
         }
-        Some(Commands::Now { raw, after }) => {
+        Some(Commands::Now {
+            raw,
+            after,
+            exit_code,
+            cwd,
+        }) => {
             require_known_shell(&shell);
-            commands::now::run(&shell, ngram, &config, cli.debug, raw, after.as_deref());
+            commands::now::run(
+                &shell,
+                ngram,
+                &config,
+                cli.debug,
+                raw,
+                commands::now::InvocationContext {
+                    after: after.as_deref(),
+                    exit_code,
+                    cwd: cwd.as_deref(),
+                },
+            );
         }
         None => {
             require_known_shell(&shell);
-            commands::now::run(&shell, ngram, &config, cli.debug, false, None);
+            commands::now::run(
+                &shell,
+                ngram,
+                &config,
+                cli.debug,
+                false,
+                commands::now::InvocationContext::default(),
+            );
         }
     }
 }

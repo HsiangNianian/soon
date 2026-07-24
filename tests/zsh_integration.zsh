@@ -15,11 +15,13 @@ local test_root=${TMPDIR:-/tmp}/soon-zsh-harness-$$
 local fake_bin=$test_root/bin
 local integration_file=$test_root/integration.zsh
 local accepted_file=/tmp/soon-zsh-accept-$$
+local repair_file=/tmp/soon-zsh-repair-$$
+local calls_file=$test_root/soon-calls.log
 mkdir -p $fake_bin
 
 function cleanup() {
   zpty -d soon_shell 2>/dev/null || true
-  rm -f $accepted_file
+  rm -f $accepted_file $repair_file
   rm -rf $test_root
 }
 trap cleanup EXIT INT TERM HUP
@@ -28,8 +30,16 @@ $soon_bin init zsh > $integration_file
 
 cat > $fake_bin/soon <<FAKE_SOON
 #!/bin/sh
+printf '%s\n' "\$*" >> '$calls_file'
+case " \$* " in
+  *' events record-command '*|*' events record-suggestion '*) exit 0 ;;
+esac
 sleep 0.05
-printf '%s\n' 'touch $accepted_file'
+case " \$* " in
+  *' --exit-code 0 '*) printf '%s\n' 'touch $accepted_file' ;;
+  *' --exit-code '*) printf '%s\n' 'touch $repair_file' ;;
+  *) printf '%s\n' 'touch $accepted_file' ;;
+esac
 FAKE_SOON
 chmod +x $fake_bin/soon
 
@@ -97,15 +107,34 @@ function wait_for_file() {
   return 1
 }
 
+function wait_for_log() {
+  local needle=$1
+  local -F deadline=$(( EPOCHREALTIME + 5 ))
+
+  while (( EPOCHREALTIME < deadline )); do
+    if [[ -f $calls_file ]] && [[ "$(<$calls_file)" == *$needle* ]]; then
+      return 0
+    fi
+    sleep 0.02
+  done
+
+  print -u2 -- "timed out waiting for log entry: $needle"
+  [[ -f $calls_file ]] && print -u2 -- "soon calls: ${(qqq)$(<$calls_file)}"
+  return 1
+}
+
 # Render and accept a suggestion at an empty prompt.
 wait_for_output 'SOON_PROMPT> '
 transcript=''
 wait_for_output "touch $accepted_file"
+wait_for_log '--outcome shown'
 transcript=''
 zpty -w -n soon_shell $'\x06'
+wait_for_log '--outcome accepted'
 sleep 0.05
 zpty -w -n soon_shell $'\n'
 wait_for_file $accepted_file
+wait_for_log '--outcome executed'
 wait_for_output 'SOON_PROMPT> '
 
 # Normal typing ignores the ghost suggestion instead of modifying the buffer.
@@ -116,8 +145,39 @@ transcript=''
 zpty -w soon_shell '[[ $SOON_LAST_LATENCY_MS == <->.<-> ]] && print -r -- SOON_TYPED_NORMALLY'
 wait_for_output 'SOON_TYPED_NORMALLY'
 wait_for_output 'SOON_PROMPT> '
+wait_for_log '--outcome dismissed'
 [[ ! -e $accepted_file ]] || {
   print -u2 -- 'typing a command unexpectedly accepted the suggestion'
+  return 1
+}
+
+# Completed commands drive distinct Next-step and Repair predictions, while preserving `$?`.
+transcript=''
+zpty -w soon_shell 'true'
+wait_for_output 'SOON_PROMPT> '
+wait_for_log 'record-command --id'
+wait_for_log '--command true'
+wait_for_log '--exit-code 0'
+
+transcript=''
+zpty -w soon_shell 'false'
+wait_for_output 'SOON_PROMPT> '
+wait_for_output "touch $repair_file"
+wait_for_log '--command false'
+wait_for_log '--exit-code 1'
+
+transcript=''
+zpty -w soon_shell 'print -r -- "SOON_STATUS:$?"'
+wait_for_output 'SOON_STATUS:1'
+wait_for_output 'SOON_PROMPT> '
+
+# Invoking soon is a manual prediction trigger, not a command event to learn.
+transcript=''
+zpty -w soon_shell 'soon'
+wait_for_output 'SOON_PROMPT> '
+sleep 0.1
+[[ "$(<$calls_file)" != *'--command soon --cwd'* ]] || {
+  print -u2 -- 'manual soon invocation was recorded as a command event'
   return 1
 }
 

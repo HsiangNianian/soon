@@ -133,6 +133,19 @@ The current integration honors configured ignored executables and refuses multil
 
 `soon learn ask` is different: it is an optional experimental path that sends recent command context, the current directory, and time context to the OpenAI-compatible or Ollama endpoint you configure. API credentials are currently stored in the local config file. Do not enable remote enrichment for sensitive histories; safer capture, filtering, and credential guidance are tracked in [#9](https://github.com/HsiangNianian/soon/issues/9).
 
+The Zsh lifecycle integration stores local command and suggestion events in a retained JSONL log under the operating system's application-data directory. Inspect its exact path, schema version, retention, and aggregate counts without printing command text:
+
+```bash
+soon events inspect
+```
+
+The default retention is 10,000 events. It is user-controlled, and clearing requires explicit confirmation:
+
+```bash
+soon config set events.retention 5000
+soon events clear --yes
+```
+
 Config lives at `~/.config/soon/config.toml`:
 
 ```bash
@@ -151,6 +164,7 @@ soon init zsh           Print the opt-in Zsh integration
 soon stats              Show the most-used executables
 soon which              Show shell and history diagnostics
 soon config             View or change local configuration
+soon events             Inspect or clear local agent events
 soon learn              Use the experimental learning tools
 soon update             Check the configured release channel
 ```

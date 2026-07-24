@@ -3,9 +3,17 @@ use std::env;
 
 use crate::cache;
 use crate::config::AppConfig;
+use crate::events;
 use crate::learn::{self, db::LearnDb, pattern};
 use crate::predict::{self, main_cmd};
 use crate::shell::{self, HistoryItem, ShellKind};
+
+#[derive(Debug, Default)]
+pub struct InvocationContext<'a> {
+    pub after: Option<&'a str>,
+    pub exit_code: Option<i32>,
+    pub cwd: Option<&'a str>,
+}
 
 pub fn run(
     shell: &ShellKind,
@@ -13,8 +21,18 @@ pub fn run(
     config: &AppConfig,
     debug: bool,
     raw: bool,
-    after: Option<&str>,
+    context: InvocationContext<'_>,
 ) {
+    if raw {
+        if let (Some(command), Some(exit_code)) = (context.after, context.exit_code) {
+            if let Some(suggestion) = events::predict_after(command, exit_code, context.cwd, config)
+            {
+                print_raw_suggestion(Some(suggestion));
+                return;
+            }
+        }
+    }
+
     let history = shell::load_history(shell);
     if history.is_empty() {
         eprintln!(
@@ -25,7 +43,7 @@ pub fn run(
     }
 
     let cache_cmds = if raw {
-        recent_context(&history, ngram, after)
+        recent_context(&history, ngram, context.after)
     } else {
         cache::overwrite_soon_cache_from_history(shell, ngram);
         cache::read_soon_cache(ngram)
@@ -34,9 +52,7 @@ pub fn run(
         predict::predict_next_command(&history, ngram, &cache_cmds, config, debug && !raw);
 
     if raw {
-        if let Some(cmd) = suggestion.filter(|cmd| !cmd.chars().any(char::is_control)) {
-            println!("{cmd}");
-        }
+        print_raw_suggestion(suggestion);
         return;
     }
 
@@ -94,6 +110,12 @@ pub fn run(
                 println!("  {:>2}: {}", i + 1, cmd);
             }
         }
+    }
+}
+
+fn print_raw_suggestion(suggestion: Option<String>) {
+    if let Some(cmd) = suggestion.filter(|cmd| !cmd.chars().any(char::is_control)) {
+        println!("{cmd}");
     }
 }
 

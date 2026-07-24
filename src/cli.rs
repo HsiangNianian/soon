@@ -32,6 +32,12 @@ pub enum Commands {
         /// Include the command that just started in the prediction context
         #[arg(long, hide = true, requires = "raw")]
         after: Option<String>,
+        /// Exit status of the completed command
+        #[arg(long, hide = true, requires = "after", allow_hyphen_values = true)]
+        exit_code: Option<i32>,
+        /// Working directory of the completed command
+        #[arg(long, hide = true, requires = "after")]
+        cwd: Option<String>,
     },
     /// Show most used commands
     Stats,
@@ -48,6 +54,61 @@ pub enum Commands {
     Config {
         #[command(subcommand)]
         action: Option<ConfigAction>,
+    },
+    /// Inspect or clear the local command event store
+    Events {
+        #[command(subcommand)]
+        action: EventsAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum EventsAction {
+    /// Show event counts, schema, retention, and storage path
+    Inspect,
+    /// Remove all locally retained command and suggestion events
+    Clear {
+        /// Confirm permanent removal
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Record one completed command event (used by shell integrations)
+    #[command(hide = true)]
+    RecordCommand {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        command: String,
+        #[arg(long)]
+        cwd: String,
+        #[arg(long)]
+        started_at_ms: i64,
+        #[arg(long)]
+        duration_ms: u64,
+        #[arg(long, allow_hyphen_values = true)]
+        exit_code: i32,
+        #[arg(long)]
+        shell: String,
+        #[arg(long)]
+        previous_id: Option<String>,
+    },
+    /// Record one suggestion feedback event (used by shell integrations)
+    #[command(hide = true)]
+    RecordSuggestion {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        command_event_id: Option<String>,
+        #[arg(long)]
+        trigger: String,
+        #[arg(long)]
+        candidate_source: String,
+        #[arg(long)]
+        command: String,
+        #[arg(long)]
+        outcome: String,
+        #[arg(long)]
+        latency_ms: f64,
     },
 }
 
