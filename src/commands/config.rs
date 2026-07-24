@@ -74,6 +74,7 @@ fn get_value(key: &str) {
             eprintln!("\n{}", "Available keys:".dimmed());
             eprintln!("  general.shell, general.ngram, general.ignored_commands");
             eprintln!("  update.channel");
+            eprintln!("  events.retention");
             eprintln!("  llm.provider, llm.api_url, llm.api_key, llm.model, llm.prompt");
             std::process::exit(1);
         }

@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub update: UpdateConfig,
     #[serde(default)]
     pub llm: LlmConfig,
+    #[serde(default)]
+    pub events: EventsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +44,12 @@ pub struct LlmConfig {
     pub prompt: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventsConfig {
+    #[serde(default = "default_event_retention")]
+    pub retention: usize,
+}
+
 fn default_shell() -> String {
     "auto".to_string()
 }
@@ -52,6 +60,10 @@ fn default_ngram() -> usize {
 
 fn default_channel() -> String {
     "auto".to_string()
+}
+
+fn default_event_retention() -> usize {
+    10_000
 }
 
 fn default_ignored_commands() -> Vec<String> {
@@ -79,6 +91,14 @@ impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
             channel: default_channel(),
+        }
+    }
+}
+
+impl Default for EventsConfig {
+    fn default() -> Self {
+        Self {
+            retention: default_event_retention(),
         }
     }
 }
@@ -133,6 +153,7 @@ impl AppConfig {
             }
             "llm.model" => Some(self.llm.model.clone()),
             "llm.prompt" => Some(self.llm.prompt.clone()),
+            "events.retention" => Some(self.events.retention.to_string()),
             _ => None,
         }
     }
@@ -168,6 +189,15 @@ impl AppConfig {
             "llm.api_key" => self.llm.api_key = value.to_string(),
             "llm.model" => self.llm.model = value.to_string(),
             "llm.prompt" => self.llm.prompt = value.to_string(),
+            "events.retention" => {
+                let retention = value
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid event retention: {value}"))?;
+                if retention == 0 || retention > 1_000_000 {
+                    return Err("Event retention must be between 1 and 1000000".to_string());
+                }
+                self.events.retention = retention;
+            }
             _ => return Err(format!("Unknown config key: {}", key)),
         }
         Ok(())
