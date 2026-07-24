@@ -25,7 +25,7 @@ pub struct CommandEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum StoredEvent {
+pub(crate) enum StoredEvent {
     Command(CommandEvent),
     Suggestion(SuggestionEvent),
 }
@@ -40,6 +40,29 @@ pub struct SuggestionEvent {
     pub command: String,
     pub outcome: SuggestionOutcome,
     pub latency_ms: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_outcome: Option<ModelOutcome>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelOutcome {
+    Success,
+    Timeout,
+    InvalidOutput,
+    DeterministicFallback,
+}
+
+impl ModelOutcome {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "success" => Ok(Self::Success),
+            "timeout" => Ok(Self::Timeout),
+            "invalid-output" => Ok(Self::InvalidOutput),
+            "deterministic-fallback" => Ok(Self::DeterministicFallback),
+            _ => Err(format!("Unknown model outcome: {value}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -293,6 +316,10 @@ fn load_stored_events(path: &std::path::Path) -> Vec<StoredEvent> {
         .flat_map(|reader| reader.lines().map_while(Result::ok))
         .filter_map(|line| serde_json::from_str::<StoredEvent>(&line).ok())
         .collect()
+}
+
+pub(crate) fn replay_events() -> Vec<StoredEvent> {
+    load_stored_events(&event_store_path())
 }
 
 fn append_many(path: &std::path::Path, events: &[StoredEvent]) -> Result<(), String> {

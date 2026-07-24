@@ -1,6 +1,8 @@
 use crate::cli::EventsAction;
 use crate::config::AppConfig;
-use crate::events::{self, CommandEvent, SuggestionEvent, SuggestionOutcome, SCHEMA_VERSION};
+use crate::events::{
+    self, CommandEvent, ModelOutcome, SuggestionEvent, SuggestionOutcome, SCHEMA_VERSION,
+};
 use crate::history_import;
 use crate::shell::{self, ShellKind};
 
@@ -40,11 +42,20 @@ pub fn run(action: EventsAction, config: &AppConfig) {
             command,
             outcome,
             latency_ms,
+            model_outcome,
         } => {
             let outcome = SuggestionOutcome::parse(&outcome).unwrap_or_else(|error| {
                 eprintln!("{error}");
                 std::process::exit(2);
             });
+            let model_outcome = model_outcome
+                .as_deref()
+                .map(ModelOutcome::parse)
+                .transpose()
+                .unwrap_or_else(|error| {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                });
             record_suggestion(
                 SuggestionEvent {
                     schema_version: SCHEMA_VERSION,
@@ -55,6 +66,7 @@ pub fn run(action: EventsAction, config: &AppConfig) {
                     command,
                     outcome,
                     latency_ms,
+                    model_outcome,
                 },
                 config,
             );

@@ -3,6 +3,7 @@ pub mod events;
 pub mod init;
 pub mod learn;
 pub mod now;
+pub mod replay;
 pub mod stats;
 pub mod update;
 pub mod which;

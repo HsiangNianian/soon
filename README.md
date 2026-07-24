@@ -96,6 +96,9 @@ soon which
 
 # Show the most common executables in local history
 soon stats
+
+# Measure the current policy against past local transitions
+soon replay
 ```
 
 Override shell detection when needed:
@@ -112,7 +115,7 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 |---|---|
 | On-demand command plus opt-in Zsh loop | Coherent beta install and clean-session smoke test |
 | Manual, successful-command Next-step, and failed-command Repair triggers | Clean-session lifecycle regression coverage |
-| Retained command and suggestion events with feedback | Local replay quality and latency metrics |
+| Retained events plus chronological quality and latency replay | Release-gate fixture with a 20 ms Zsh p95 budget |
 | Sensitive-command filters plus idempotent Zsh history import | A documented v0.4 privacy and release audit |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
@@ -125,17 +128,17 @@ The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/
 4. Accumulate repeated transition evidence and weight newer evidence more heavily.
 5. Print the highest-ranked full command without presenting the heuristic as calibrated confidence.
 
-This baseline is deliberately simple. A more complex ranker must beat it on the local replay metrics planned in [#11](https://github.com/HsiangNianian/soon/issues/11).
+This baseline is deliberately simple. A more complex ranker must beat it under `soon replay` before it replaces the deterministic hot path.
 
 ## Agent roadmap
 
-The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, and a private history-import path. The remaining gate is measured local replay plus a coherent beta release.
+The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, a private history-import path, and measured local replay. The remaining gate is a coherent beta release.
 
 The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) then measures a contextual probabilistic ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) before adding opt-in local-model and OpenAI-compatible candidate sources in [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
 ## Privacy
 
-`soon`, `soon now`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
+`soon`, `soon now`, `soon replay`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
 
 The current source rejects likely inline API keys, tokens, authorization headers, password flags, private-key material, and known credential prefixes before storing a command or suggestion. It applies the same filter again before ranking or rendering shell history, old event data, legacy learn data, provider context, and model output. Rejections report a category, not the command text.
 
@@ -193,6 +196,18 @@ soon events import-zsh \
 
 Plain command-per-line history and Zsh extended history (`: <epoch>:<duration>;<command>`) are supported. Extended timestamps and durations are preserved; unavailable cwd, exit status, and plain-history timestamps remain unknown. Preview and import summaries report importable, sensitive, malformed, duplicate, and already-imported counts without printing command text. Stable event IDs make repeated imports idempotent, including identical rotated files.
 
+Measure the deterministic policy against that local event memory:
+
+```bash
+soon replay
+```
+
+Replay follows JSONL append order rather than event timestamps. For each linked command transition it predicts first, scores the result, and only then exposes that transition to later samples, so future observations cannot leak into training. Unknown exit status is classified as `manual`; exit status zero is `next-step`; any other status is `repair`.
+
+`Samples` counts eligible linked transitions. Coverage is predictions divided by samples, and top-1 match is exact command matches divided by all samples. Overall and per-trigger rows include p50/p95 prediction latency. Candidate-source rows compare deterministic history with contextual policy, local model, or remote-provider suggestions when those sources have recorded a `shown` event before the actual next command. Model attempts aligned to a later command also report timeout, invalid-output, and deterministic-fallback rates.
+
+The report is aggregate-only: it prints no command text and performs no upload. The deterministic CI fixture has a Zsh hot-path p95 budget of **20 ms**; `soon replay` prints `PASS` or `FAIL` against that budget on the current local event set.
+
 Config lives at `~/.config/soon/config.toml`:
 
 ```bash
@@ -212,6 +227,7 @@ soon stats              Show the most-used executables
 soon which              Show shell and history diagnostics
 soon config             View or change local configuration
 soon events             Inspect, clear, or import local agent events
+soon replay             Measure local prediction quality and latency
 soon learn              Use the experimental learning tools
 soon update             Check the configured release channel
 ```
