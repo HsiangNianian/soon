@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -14,10 +15,10 @@ pub struct CommandEvent {
     pub schema_version: u8,
     pub id: String,
     pub command: String,
-    pub cwd: String,
-    pub started_at_ms: i64,
-    pub duration_ms: u64,
-    pub exit_code: i32,
+    pub cwd: Option<String>,
+    pub started_at_ms: Option<i64>,
+    pub duration_ms: Option<u64>,
+    pub exit_code: Option<i32>,
     pub shell: String,
     pub previous_event_id: Option<String>,
 }
@@ -64,6 +65,7 @@ impl SuggestionOutcome {
 
 #[derive(Debug, Default)]
 struct CandidateScore {
+    result_matches: usize,
     evidence: usize,
     directory_matches: usize,
     latest_index: usize,
@@ -92,14 +94,68 @@ pub fn event_store_path() -> PathBuf {
 }
 
 pub fn record_command(event: CommandEvent, config: &AppConfig) -> Result<(), String> {
+    validate_command(&event, config)?;
+
+    append(&StoredEvent::Command(event), config.events.retention)
+}
+
+pub fn existing_command_event_ids() -> HashSet<String> {
+    load_command_events()
+        .into_iter()
+        .map(|event| event.id)
+        .collect()
+}
+
+pub fn import_commands(events: Vec<CommandEvent>, config: &AppConfig) -> Result<usize, String> {
+    if config.events.retention == 0 {
+        return Err("Event retention must be at least 1".to_string());
+    }
+    for event in &events {
+        validate_command(event, config)?;
+    }
+
+    let path = event_store_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create event directory: {error}"))?;
+    }
+    let mut existing = load_stored_events(&path);
+    let mut known_ids: HashSet<String> = existing
+        .iter()
+        .filter_map(|event| match event {
+            StoredEvent::Command(command) => Some(command.id.clone()),
+            StoredEvent::Suggestion(_) => None,
+        })
+        .collect();
+    let new_events: Vec<StoredEvent> = events
+        .into_iter()
+        .filter(|event| known_ids.insert(event.id.clone()))
+        .map(StoredEvent::Command)
+        .collect();
+    let imported = new_events.len();
+    if imported == 0 {
+        return Ok(0);
+    }
+
+    if existing.len() + imported > config.events.retention {
+        existing.extend(new_events);
+        let keep_from = existing.len().saturating_sub(config.events.retention);
+        write_events_atomically(&path, &existing[keep_from..])?;
+    } else {
+        append_many(&path, &new_events)?;
+    }
+
+    Ok(imported)
+}
+
+fn validate_command(event: &CommandEvent, config: &AppConfig) -> Result<(), String> {
     if event.command.trim().is_empty() || event.command.chars().any(char::is_control) {
         return Err("Refusing to store an empty command or control characters".to_string());
     }
     if let Some(reason) = privacy::rejection_reason(&event.command, config) {
         return Err(format!("Refusing to store sensitive command: {reason}"));
     }
-
-    append(&StoredEvent::Command(event), config.events.retention)
+    Ok(())
 }
 
 pub fn record_suggestion(event: SuggestionEvent, config: &AppConfig) -> Result<(), String> {
@@ -174,7 +230,11 @@ pub fn predict_after(
     let wanted_success = exit_code == 0;
 
     for (index, event) in events.iter().enumerate() {
-        if event.command.trim() != command.trim() || (event.exit_code == 0) != wanted_success {
+        if event.command.trim() != command.trim()
+            || event
+                .exit_code
+                .is_some_and(|code| (code == 0) != wanted_success)
+        {
             continue;
         }
 
@@ -189,16 +249,19 @@ pub fn predict_after(
         }
 
         let score = candidates.entry(next.command.clone()).or_default();
+        score.result_matches += usize::from(event.exit_code.is_some());
         score.evidence += 1;
-        score.directory_matches += usize::from(cwd.is_some_and(|cwd| cwd == event.cwd));
+        score.directory_matches +=
+            usize::from(cwd.is_some_and(|cwd| Some(cwd) == event.cwd.as_deref()));
         score.latest_index = index;
     }
 
     let mut ranked: Vec<_> = candidates.into_iter().collect();
     ranked.sort_by(|(command_a, score_a), (command_b, score_b)| {
         score_b
-            .directory_matches
-            .cmp(&score_a.directory_matches)
+            .result_matches
+            .cmp(&score_a.result_matches)
+            .then_with(|| score_b.directory_matches.cmp(&score_a.directory_matches))
             .then_with(|| score_b.evidence.cmp(&score_a.evidence))
             .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
             .then_with(|| command_a.cmp(command_b))
@@ -220,6 +283,52 @@ fn load_command_events() -> Vec<CommandEvent> {
             StoredEvent::Suggestion(_) => None,
         })
         .collect()
+}
+
+fn load_stored_events(path: &std::path::Path) -> Vec<StoredEvent> {
+    File::open(path)
+        .ok()
+        .map(BufReader::new)
+        .into_iter()
+        .flat_map(|reader| reader.lines().map_while(Result::ok))
+        .filter_map(|line| serde_json::from_str::<StoredEvent>(&line).ok())
+        .collect()
+}
+
+fn append_many(path: &std::path::Path, events: &[StoredEvent]) -> Result<(), String> {
+    let needs_separator = fs::read(path)
+        .ok()
+        .and_then(|contents| contents.last().copied())
+        .is_some_and(|last| last != b'\n');
+    let mut encoded = Vec::new();
+    if needs_separator {
+        encoded.push(b'\n');
+    }
+    for event in events {
+        serde_json::to_writer(&mut encoded, event)
+            .map_err(|error| format!("Failed to serialize imported event: {error}"))?;
+        encoded.push(b'\n');
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("Failed to open event store: {error}"))?;
+    file.write_all(&encoded)
+        .map_err(|error| format!("Failed to append imported events: {error}"))
+}
+
+fn write_events_atomically(path: &std::path::Path, events: &[StoredEvent]) -> Result<(), String> {
+    let mut encoded = Vec::new();
+    for event in events {
+        serde_json::to_writer(&mut encoded, event)
+            .map_err(|error| format!("Failed to serialize retained event: {error}"))?;
+        encoded.push(b'\n');
+    }
+    let temp_path = path.with_extension(format!("jsonl.tmp-{}", std::process::id()));
+    fs::write(&temp_path, encoded)
+        .map_err(|error| format!("Failed to compact event store: {error}"))?;
+    fs::rename(&temp_path, path).map_err(|error| format!("Failed to replace event store: {error}"))
 }
 
 fn append(event: &StoredEvent, retention: usize) -> Result<(), String> {

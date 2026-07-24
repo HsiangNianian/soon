@@ -785,3 +785,229 @@ fn markov_fallback_does_not_render_sensitive_legacy_entries() {
     assert!(!stdout.contains(secret), "Markov fallback leaked a secret");
     assert!(!stdout.contains("deploy --token"), "{stdout}");
 }
+
+#[test]
+fn zsh_history_import_preview_is_non_mutating_and_private() {
+    let home = isolated_home();
+    let history_path = home.join("history.zsh");
+    let sensitive = "preview-secret-value";
+    let malformed = "malformed-command-must-not-print";
+    std::fs::write(
+        &history_path,
+        format!(
+            "git status\n: 1721811600:12;cargo test --workspace\n: bad:line;{malformed}\nexport API_TOKEN={sensitive}\n"
+        ),
+    )
+    .expect("write Zsh history fixture");
+
+    let preview = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&history_path)
+        .arg("--preview")
+        .output()
+        .expect("preview Zsh history import");
+    let stdout = String::from_utf8(preview.stdout).expect("UTF-8 import preview");
+
+    assert!(
+        preview.status.success(),
+        "preview failed: {}",
+        String::from_utf8_lossy(&preview.stderr)
+    );
+    assert!(stdout.contains("Importable entries: 2"), "{stdout}");
+    assert!(stdout.contains("Sensitive entries skipped: 1"), "{stdout}");
+    assert!(stdout.contains("Malformed entries skipped: 1"), "{stdout}");
+    assert!(stdout.contains("Would import: 2"), "{stdout}");
+    assert!(!stdout.contains(sensitive), "preview leaked sensitive text");
+    assert!(!stdout.contains(malformed), "preview leaked malformed text");
+
+    let inspect = soon(&home)
+        .args(["events", "inspect"])
+        .output()
+        .expect("inspect after preview");
+    let inspect_stdout = String::from_utf8(inspect.stdout).expect("UTF-8 inspect output");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        inspect_stdout.contains("Command events: 0"),
+        "{inspect_stdout}"
+    );
+}
+
+#[test]
+fn zsh_history_import_is_idempotent_and_preserves_unknown_metadata() {
+    let home = isolated_home();
+    let history_path = home.join("history.zsh");
+    std::fs::write(
+        &history_path,
+        "git status\n: 1721811600:12;cargo test --workspace\n",
+    )
+    .expect("write Zsh history fixture");
+
+    let first = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&history_path)
+        .output()
+        .expect("import Zsh history");
+    assert!(
+        first.status.success(),
+        "first import failed: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first_stdout = String::from_utf8(first.stdout).expect("UTF-8 import output");
+    assert!(first_stdout.contains("Imported: 2"), "{first_stdout}");
+    assert!(
+        first_stdout.contains("Already imported: 0"),
+        "{first_stdout}"
+    );
+
+    let second = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&history_path)
+        .output()
+        .expect("repeat Zsh history import");
+    assert!(
+        second.status.success(),
+        "second import failed: {}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let second_stdout = String::from_utf8(second.stdout).expect("UTF-8 repeated import output");
+    assert!(second_stdout.contains("Imported: 0"), "{second_stdout}");
+    assert!(
+        second_stdout.contains("Already imported: 2"),
+        "{second_stdout}"
+    );
+
+    let inspect = soon(&home)
+        .args(["events", "inspect"])
+        .output()
+        .expect("inspect imported events");
+    let inspect_stdout = String::from_utf8(inspect.stdout).expect("UTF-8 inspect output");
+    let event_path = inspect_stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Event store: "))
+        .map(PathBuf::from)
+        .expect("event store path");
+    let stored = std::fs::read_to_string(event_path).expect("read imported event store");
+    let events: Vec<serde_json::Value> = stored
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("parse imported event"))
+        .collect();
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        inspect_stdout.contains("Command events: 2"),
+        "{inspect_stdout}"
+    );
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["command"], "git status");
+    assert!(events[0]["cwd"].is_null());
+    assert!(events[0]["started_at_ms"].is_null());
+    assert!(events[0]["duration_ms"].is_null());
+    assert!(events[0]["exit_code"].is_null());
+    assert!(events[0]["previous_event_id"].is_null());
+    assert_eq!(events[1]["command"], "cargo test --workspace");
+    assert_eq!(events[1]["started_at_ms"], 1_721_811_600_000_i64);
+    assert_eq!(events[1]["duration_ms"], 12_000_u64);
+    assert!(events[1]["cwd"].is_null());
+    assert!(events[1]["exit_code"].is_null());
+    assert_eq!(events[1]["previous_event_id"], events[0]["id"]);
+}
+
+#[test]
+fn imported_zsh_history_can_predict_without_the_source_history_file() {
+    let home = isolated_home();
+    let history_path = home.join("cold-start-history.zsh");
+    std::fs::write(&history_path, "git status\ncargo test --workspace\n")
+        .expect("write cold-start history");
+
+    let imported = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&history_path)
+        .output()
+        .expect("import cold-start history");
+    assert!(
+        imported.status.success(),
+        "import failed: {}",
+        String::from_utf8_lossy(&imported.stderr)
+    );
+    std::fs::remove_file(&history_path).expect("remove source history");
+
+    let prediction = soon(&home)
+        .args([
+            "--shell",
+            "zsh",
+            "now",
+            "--raw",
+            "--after",
+            "git status",
+            "--exit-code",
+            "0",
+        ])
+        .output()
+        .expect("predict from imported events");
+    let stdout = String::from_utf8(prediction.stdout).expect("UTF-8 prediction");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        prediction.status.success(),
+        "prediction failed: {}",
+        String::from_utf8_lossy(&prediction.stderr)
+    );
+    assert_eq!(stdout, "cargo test --workspace\n");
+}
+
+#[test]
+fn overlapping_rotated_zsh_histories_are_deduplicated() {
+    let home = isolated_home();
+    let current = home.join(".zsh_history");
+    let rotated = home.join(".zsh_history.1");
+    let contents = "git status\ncargo test --workspace\n";
+    std::fs::write(&current, contents).expect("write current Zsh history");
+    std::fs::write(&rotated, contents).expect("write rotated Zsh history");
+
+    let preview = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&rotated)
+        .args(["--path"])
+        .arg(&current)
+        .arg("--preview")
+        .output()
+        .expect("preview overlapping Zsh histories");
+    let preview_stdout = String::from_utf8(preview.stdout).expect("UTF-8 preview");
+    assert!(preview.status.success(), "preview failed");
+    assert!(
+        preview_stdout.contains("Importable entries: 4"),
+        "{preview_stdout}"
+    );
+    assert!(
+        preview_stdout.contains("Duplicate entries skipped: 2"),
+        "{preview_stdout}"
+    );
+    assert!(
+        preview_stdout.contains("Would import: 2"),
+        "{preview_stdout}"
+    );
+
+    let imported = soon(&home)
+        .args(["events", "import-zsh", "--path"])
+        .arg(&rotated)
+        .args(["--path"])
+        .arg(&current)
+        .output()
+        .expect("import overlapping Zsh histories");
+    let import_stdout = String::from_utf8(imported.stdout).expect("UTF-8 import output");
+    assert!(imported.status.success(), "import failed");
+    assert!(import_stdout.contains("Imported: 2"), "{import_stdout}");
+
+    let inspect = soon(&home)
+        .args(["events", "inspect"])
+        .output()
+        .expect("inspect imported histories");
+    let inspect_stdout = String::from_utf8(inspect.stdout).expect("UTF-8 inspect output");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        inspect_stdout.contains("Command events: 2"),
+        "{inspect_stdout}"
+    );
+}

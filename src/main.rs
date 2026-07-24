@@ -3,6 +3,7 @@ mod cli;
 mod commands;
 mod config;
 mod events;
+mod history_import;
 mod learn;
 mod predict;
 mod privacy;

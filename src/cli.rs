@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -71,6 +72,15 @@ pub enum EventsAction {
         /// Confirm permanent removal
         #[arg(long)]
         yes: bool,
+    },
+    /// Preview or import Zsh history into the local event store
+    ImportZsh {
+        /// History file to import; repeat for rotated files
+        #[arg(long, value_name = "PATH")]
+        path: Vec<PathBuf>,
+        /// Report counts without writing events
+        #[arg(long)]
+        preview: bool,
     },
     /// Record one completed command event (used by shell integrations)
     #[command(hide = true)]
