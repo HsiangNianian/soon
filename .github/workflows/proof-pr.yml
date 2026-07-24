@@ -17,6 +17,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install Zsh for the interactive shell harness
+        run: sudo apt-get update && sudo apt-get install --yes zsh
+
       - uses: HsiangNianian/proof-pr@v0.1.0
         with:
           base: ${{ github.event.pull_request.base.sha }}
