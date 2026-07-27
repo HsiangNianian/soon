@@ -102,6 +102,10 @@ soon stats
 
 # Measure the current policy against past local transitions
 soon replay
+
+# Export aggregate adoption metrics that are safe to share
+soon report
+soon report --json
 ```
 
 Override shell detection when needed:
@@ -143,7 +147,7 @@ The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milest
 
 ## Privacy
 
-`soon`, `soon now`, `soon replay`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
+`soon`, `soon now`, `soon replay`, `soon report`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
 
 The current source rejects likely inline API keys, tokens, authorization headers, password flags, private-key material, and known credential prefixes before storing a command or suggestion. It applies the same filter again before ranking or rendering shell history, old event data, legacy learn data, provider context, and model output. Rejections report a category, not the command text.
 
@@ -213,6 +217,30 @@ Replay follows JSONL append order rather than event timestamps. For each linked 
 
 The report is aggregate-only: it prints no command text and performs no upload. The deterministic CI fixture has a Zsh hot-path p95 budget of **20 ms**; `soon replay` prints `PASS` or `FAIL` against that budget on the current local event set.
 
+Export the smaller adoption report when sharing beta feedback:
+
+```bash
+soon report
+soon report --json
+```
+
+This is an explicit, offline read of the same local event store. Both forms contain aggregate counters and latency distributions only—never raw commands, arguments, paths, hostnames, usernames, event IDs, timestamps, or database rows. The human form is designed for an issue or discussion; `--json` is suitable for scripts and uses schema version `1`:
+
+| JSON field | Meaning |
+|---|---|
+| `schema_version` | Report schema version; currently `1` |
+| `samples.eligible_transitions` | Linked command transitions eligible for chronological replay |
+| `samples.predictions` | Eligible transitions for which the deterministic replay produced a prediction |
+| `samples.prediction_coverage_percent` | `predictions / eligible_transitions * 100` |
+| `suggestions.shown` | Retained suggestion events with the `shown` outcome |
+| `suggestions.accepted` | Retained suggestion events with the `accepted` outcome |
+| `suggestions.acceptance_percent` | `accepted / shown * 100` |
+| `suggestions.executed` | Retained suggestion events with the `executed` outcome |
+| `suggestions.execution_percent` | `executed / shown * 100` |
+| `latency_ms.p50`, `latency_ms.p95` | Replay prediction latency percentiles in milliseconds |
+
+A percentage is `null` when its denominator is zero, and both latency values are `null` when there are no eligible transitions. Human output prints `n/a` for the same cases. This keeps empty and partially retained event stores valid without presenting missing observations as zero-latency measurements.
+
 Config lives at `~/.config/soon/config.toml`:
 
 ```bash
@@ -234,6 +262,7 @@ soon which              Show shell and history diagnostics
 soon config             View or change local configuration
 soon events             Inspect, clear, or import local agent events
 soon replay             Measure local prediction quality and latency
+soon report             Export privacy-safe aggregate adoption metrics
 soon learn              Use the experimental learning tools
 soon update             Check the configured release channel
 ```
