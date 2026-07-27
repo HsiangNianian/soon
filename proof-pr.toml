@@ -15,8 +15,8 @@ name = "cargo-test"
 command = ["cargo", "test", "--locked"]
 
 [[verify.checks]]
-name = "zsh-integration"
-command = ["zsh", "tests/zsh_integration.zsh", "target/debug/soon"]
+name = "release-smoke"
+command = ["zsh", "tests/release_smoke.zsh"]
 
 [[verify.checks]]
 name = "cargo-clippy"
