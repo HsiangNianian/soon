@@ -12,7 +12,7 @@ A local-first personal terminal agent that learns recurring workflows and predic
 
 </div>
 
-> **Prototype status:** the current source includes the first opt-in Zsh ghost-suggestion loop. The published `0.3.0` package still exposes only on-demand prediction; install from Git to test the interactive path before the [v0.4 beta](https://github.com/HsiangNianian/soon/milestone/1).
+> **Beta status:** v0.4 ships the first opt-in Zsh ghost-suggestion loop. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
 
 ## The idea
 
@@ -48,15 +48,16 @@ soon is not trying to replace search or completion. The product succeeds only if
 
 ## Install
 
-The published Cargo package is the primary release channel:
+Install the same release through Cargo or PyPI:
 
 ```bash
 cargo install soon
+python -m pip install soon-bin
 ```
 
-Before the v0.4 tag, Cargo remains on `0.3.0`; the Git install below is the beta candidate. The legacy PyPI and AUR packages remain on `0.1.9` and are not supported for beta testing. v0.4 will publish Cargo and PyPI from the same tag; AUR and standalone binaries remain explicitly unsupported until they have their own tested artifact workflow.
+Cargo and PyPI are published together from one versioned tag. AUR and standalone binaries remain explicitly unsupported until they have their own tested artifact workflows.
 
-To try the current repository behavior before the next release:
+To install the current development branch instead:
 
 ```bash
 cargo install --git https://github.com/HsiangNianian/soon
@@ -111,14 +112,14 @@ soon --shell zsh
 
 The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and tcsh history. Parsing a format does not mean interactive integration for that shell is complete.
 
-## What is shipped and what is next
+## What v0.4 ships
 
-| Current source | v0.4 target |
+| Shipped surface | Release evidence |
 |---|---|
-| On-demand command plus opt-in Zsh loop | Coherent beta install and clean-session smoke test |
-| Manual, successful-command Next-step, and failed-command Repair triggers | Clean-session lifecycle regression coverage |
-| Retained events plus chronological quality and latency replay | Release-gate fixture with a 20 ms Zsh p95 budget |
-| Sensitive-command filters plus idempotent Zsh history import | A documented v0.4 privacy and release audit |
+| On-demand command plus opt-in Zsh loop | Clean-session install-to-uninstall smoke test |
+| Manual, successful-command Next-step, and failed-command Repair triggers | Native Linux and macOS lifecycle regression coverage |
+| Retained events plus chronological quality and latency replay | Deterministic fixture with a 20 ms Zsh p95 budget |
+| Sensitive-command filters plus idempotent Zsh history import | Documented privacy behavior and aggregate-only inspection |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
 
@@ -134,7 +135,7 @@ This baseline is deliberately simple. A more complex ranker must beat it under `
 
 ## Agent roadmap
 
-The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, a private history-import path, and measured local replay. The remaining gate is a coherent beta release.
+The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, a private history-import path, and measured local replay.
 
 The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) then measures a contextual probabilistic ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) before adding opt-in local-model and OpenAI-compatible candidate sources in [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
@@ -237,7 +238,7 @@ soon update             Check the configured release channel
 
 ## Contributing
 
-Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an unblocked issue from the [v0.4 milestone](https://github.com/HsiangNianian/soon/milestone/1). The measured hybrid-policy work is intentionally deferred to [v0.5](https://github.com/HsiangNianian/soon/milestone/2). Each issue is a small end-to-end behavior with explicit acceptance criteria and blockers.
+Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an unblocked issue from the [v0.5 milestone](https://github.com/HsiangNianian/soon/milestone/2). Each issue is a small end-to-end behavior with explicit acceptance criteria and blockers.
 
 For local verification:
 
