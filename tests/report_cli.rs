@@ -64,13 +64,17 @@ fn record_command(home: &PathBuf, id: &str, text: &str, previous_id: Option<&str
 }
 
 fn record_suggestion(home: &PathBuf, outcome: &str) {
+    record_suggestion_event(home, "suggestion-1", outcome, "7.5");
+}
+
+fn record_suggestion_event(home: &PathBuf, id: &str, outcome: &str, latency_ms: &str) {
     run(
         home,
         &[
             "events",
             "record-suggestion",
             "--id",
-            "suggestion-1",
+            id,
             "--command-event-id",
             "command-4",
             "--trigger",
@@ -82,7 +86,7 @@ fn record_suggestion(home: &PathBuf, outcome: &str) {
             "--outcome",
             outcome,
             "--latency-ms",
-            "7.5",
+            latency_ms,
         ],
     );
 }
@@ -104,6 +108,16 @@ fn populated_home() -> PathBuf {
     home
 }
 
+fn event_store_path(home: &PathBuf) -> PathBuf {
+    let inspect = run(home, &["events", "inspect"]);
+    let stdout = String::from_utf8(inspect.stdout).expect("UTF-8 inspect output");
+    stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Event store: "))
+        .map(PathBuf::from)
+        .expect("event store path")
+}
+
 #[test]
 fn human_report_combines_replay_quality_with_adoption_outcomes() {
     let home = populated_home();
@@ -121,8 +135,12 @@ fn human_report_combines_replay_quality_with_adoption_outcomes() {
     assert!(stdout.contains("Suggestions shown: 1"), "{stdout}");
     assert!(stdout.contains("Accepted: 1 (100.0% of shown)"), "{stdout}");
     assert!(stdout.contains("Executed: 1 (100.0% of shown)"), "{stdout}");
-    assert!(stdout.contains("p50 latency:"), "{stdout}");
-    assert!(stdout.contains("p95 latency:"), "{stdout}");
+    assert!(stdout.contains("Replay latency: p50="), "{stdout}");
+    assert!(stdout.contains("p95="), "{stdout}");
+    assert!(
+        stdout.contains("Suggestion latency: p50=7.500 ms p95=7.500 ms (1 sample)"),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -135,7 +153,7 @@ fn json_report_has_a_versioned_aggregate_only_schema() {
 
     let _ = std::fs::remove_dir_all(&home);
     assert_eq!(json.as_object().expect("JSON object").len(), 4, "{json}");
-    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["schema_version"], 2);
     assert_eq!(
         json["samples"],
         serde_json::json!({
@@ -159,11 +177,40 @@ fn json_report_has_a_versioned_aggregate_only_schema() {
             .as_object()
             .expect("latency object")
             .len(),
-        2,
-        "{json}"
+        2
     );
-    assert!(json["latency_ms"]["p50"].is_number(), "{json}");
-    assert!(json["latency_ms"]["p95"].is_number(), "{json}");
+    assert_eq!(json["latency_ms"]["replay"]["samples"], 4);
+    assert!(json["latency_ms"]["replay"]["p50"].is_number(), "{json}");
+    assert!(json["latency_ms"]["replay"]["p95"].is_number(), "{json}");
+    assert_eq!(
+        json["latency_ms"]["suggestion"],
+        serde_json::json!({"samples": 1, "p50": 7.5, "p95": 7.5})
+    );
+}
+
+#[test]
+fn json_report_separates_replay_and_displayed_suggestion_latency() {
+    let home = populated_home();
+    record_suggestion_event(&home, "suggestion-2", "shown", "42.0");
+
+    let report = run(&home, &["report", "--json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&report.stdout).expect("report is valid JSON");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert_eq!(json["schema_version"], 2, "{json}");
+    assert_eq!(json["latency_ms"]["replay"]["samples"], 4, "{json}");
+    assert!(json["latency_ms"]["replay"]["p50"].is_number(), "{json}");
+    assert!(json["latency_ms"]["replay"]["p95"].is_number(), "{json}");
+    assert_eq!(
+        json["latency_ms"]["suggestion"],
+        serde_json::json!({
+            "samples": 2,
+            "p50": 7.5,
+            "p95": 42.0
+        }),
+        "accepted and executed rows must not duplicate suggestion-1: {json}"
+    );
 }
 
 #[test]
@@ -187,8 +234,11 @@ fn empty_store_reports_unavailable_rates_and_latency_without_failing() {
         human.contains("Executed: 0 (n/a; no shown suggestions)"),
         "{human}"
     );
-    assert!(human.contains("p50 latency: n/a"), "{human}");
-    assert!(human.contains("p95 latency: n/a"), "{human}");
+    assert!(human.contains("Replay latency: n/a (0 samples)"), "{human}");
+    assert!(
+        human.contains("Suggestion latency: n/a (0 samples)"),
+        "{human}"
+    );
     assert_eq!(json["samples"]["eligible_transitions"], 0);
     assert_eq!(
         json["samples"]["prediction_coverage_percent"],
@@ -202,8 +252,18 @@ fn empty_store_reports_unavailable_rates_and_latency_without_failing() {
         json["suggestions"]["execution_percent"],
         serde_json::Value::Null
     );
-    assert_eq!(json["latency_ms"]["p50"], serde_json::Value::Null);
-    assert_eq!(json["latency_ms"]["p95"], serde_json::Value::Null);
+    assert_eq!(json["latency_ms"]["replay"]["samples"], 0);
+    assert_eq!(json["latency_ms"]["replay"]["p50"], serde_json::Value::Null);
+    assert_eq!(json["latency_ms"]["replay"]["p95"], serde_json::Value::Null);
+    assert_eq!(json["latency_ms"]["suggestion"]["samples"], 0);
+    assert_eq!(
+        json["latency_ms"]["suggestion"]["p50"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        json["latency_ms"]["suggestion"]["p95"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]
@@ -224,13 +284,17 @@ fn partially_populated_store_keeps_counts_but_not_undefined_rates() {
         json["suggestions"]["acceptance_percent"],
         serde_json::Value::Null
     );
-    assert_eq!(json["latency_ms"]["p95"], serde_json::Value::Null);
+    assert_eq!(json["latency_ms"]["replay"]["p95"], serde_json::Value::Null);
+    assert_eq!(
+        json["latency_ms"]["suggestion"]["p95"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]
 fn reports_never_emit_sensitive_values_from_legacy_event_rows() {
     let home = isolated_home();
-    let store = home.join(".local/share/soon/events.jsonl");
+    let store = event_store_path(&home);
     std::fs::create_dir_all(store.parent().expect("event directory"))
         .expect("create event directory");
     let sensitive_command = "export OPENAI_API_KEY=sk-private-report-marker";
@@ -283,4 +347,65 @@ fn reports_never_emit_sensitive_values_from_legacy_event_rows() {
             "report leaked {sensitive}: {combined}"
         );
     }
+}
+
+#[test]
+fn suggestion_latency_ignores_invalid_legacy_values_and_non_shown_outcomes() {
+    let home = isolated_home();
+    let store = event_store_path(&home);
+    std::fs::create_dir_all(store.parent().expect("event directory"))
+        .expect("create event directory");
+    let rows = [
+        serde_json::json!({
+            "kind": "suggestion",
+            "schema_version": 1,
+            "id": "valid-shown",
+            "command_event_id": null,
+            "trigger": "manual",
+            "candidate_source": "history",
+            "command": "cargo test",
+            "outcome": "shown",
+            "latency_ms": 12.5
+        }),
+        serde_json::json!({
+            "kind": "suggestion",
+            "schema_version": 1,
+            "id": "invalid-shown",
+            "command_event_id": null,
+            "trigger": "manual",
+            "candidate_source": "history",
+            "command": "cargo check",
+            "outcome": "shown",
+            "latency_ms": -4.0
+        }),
+        serde_json::json!({
+            "kind": "suggestion",
+            "schema_version": 1,
+            "id": "valid-shown",
+            "command_event_id": null,
+            "trigger": "manual",
+            "candidate_source": "history",
+            "command": "cargo test",
+            "outcome": "accepted",
+            "latency_ms": 12.5
+        }),
+    ];
+    let encoded = rows
+        .iter()
+        .map(serde_json::Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&store, format!("{encoded}\n")).expect("write legacy event rows");
+
+    let report = run(&home, &["report", "--json"]);
+    let json: serde_json::Value =
+        serde_json::from_slice(&report.stdout).expect("report is valid JSON");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert_eq!(json["suggestions"]["shown"], 2, "{json}");
+    assert_eq!(
+        json["latency_ms"]["suggestion"],
+        serde_json::json!({"samples": 1, "p50": 12.5, "p95": 12.5}),
+        "{json}"
+    );
 }

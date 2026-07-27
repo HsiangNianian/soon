@@ -2,6 +2,39 @@
 
 All notable changes to soon are documented here.
 
+## 0.4.1 - 2026-07-27
+
+soon 0.4.1 is the adoption build for the local terminal-agent beta. It makes
+the product loop easier to evaluate and exposes privacy-safe measurements that
+distinguish offline replay performance from the latency users experience in
+the shell.
+
+### Added
+
+- Added a versioned landing page and deterministic terminal demo for the
+  Repair, Ctrl-F acceptance, and explicit execution loop
+  ([#28](https://github.com/HsiangNianian/soon/pull/28)).
+- Added explicit `soon report` and `soon report --json` commands for sharing
+  aggregate coverage, adoption, and latency metrics without command data
+  ([#29](https://github.com/HsiangNianian/soon/pull/29)).
+
+### Fixed
+
+- Split chronological replay latency from shell-observed suggestion latency,
+  and count each valid `shown` suggestion once instead of duplicating its
+  accepted, executed, or dismissed lifecycle rows
+  ([#30](https://github.com/HsiangNianian/soon/issues/30)).
+
+### Changed
+
+- Advanced the adoption report to schema version 2. Latency now contains
+  separate `replay` and `suggestion` distributions with explicit sample
+  counts and nullable p50/p95 values.
+- Clarified that a research issue may remain open when it explicitly depends
+  on the release artifact, avoiding a circular release gate.
+
+[Full diff](https://github.com/HsiangNianian/soon/compare/v0.4.0...v0.4.1)
+
 ## 0.4.0 - 2026-07-27
 
 soon 0.4.0 is the first local terminal-agent beta. Interactive integration is

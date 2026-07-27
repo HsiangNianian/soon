@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::{events, replay};
 use serde::Serialize;
 
-pub const SCHEMA_VERSION: u8 = 1;
+pub const SCHEMA_VERSION: u8 = 2;
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct AdoptionReport {
@@ -30,6 +30,13 @@ pub struct SuggestionMetrics {
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct LatencyMetrics {
+    pub replay: LatencyDistribution,
+    pub suggestion: LatencyDistribution,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+pub struct LatencyDistribution {
+    pub samples: usize,
     pub p50: Option<f64>,
     pub p95: Option<f64>,
 }
@@ -53,8 +60,16 @@ pub fn build(config: &AppConfig) -> AdoptionReport {
             execution_percent: percent(events.executed, events.shown),
         },
         latency_ms: LatencyMetrics {
-            p50: (replay.overall.samples > 0).then(|| replay.overall.p50_ms()),
-            p95: (replay.overall.samples > 0).then(|| replay.overall.p95_ms()),
+            replay: LatencyDistribution {
+                samples: replay.overall.samples,
+                p50: (replay.overall.samples > 0).then(|| replay.overall.p50_ms()),
+                p95: (replay.overall.samples > 0).then(|| replay.overall.p95_ms()),
+            },
+            suggestion: LatencyDistribution {
+                samples: events.shown_latency_samples,
+                p50: events.shown_p50_latency_ms,
+                p95: events.shown_p95_latency_ms,
+            },
         },
     }
 }
