@@ -70,11 +70,12 @@ function wait_for_output() {
   local -F deadline=$(( EPOCHREALTIME + timeout ))
 
   while (( EPOCHREALTIME < deadline )); do
+    if [[ $transcript == *"$needle"* ]]; then
+      transcript=${transcript#*"$needle"}
+      return 0
+    fi
     if zpty -r -t soon_shell chunk; then
       transcript+=$chunk
-      if [[ $transcript == *$needle* ]]; then
-        return 0
-      fi
     fi
     sleep 0.02
   done
@@ -125,10 +126,8 @@ function wait_for_log() {
 
 # Render and accept a suggestion at an empty prompt.
 wait_for_output 'SOON_PROMPT> '
-transcript=''
 wait_for_output "touch $accepted_file"
 wait_for_log '--outcome shown'
-transcript=''
 zpty -w -n soon_shell $'\x06'
 wait_for_log '--outcome accepted'
 sleep 0.05
@@ -139,9 +138,7 @@ wait_for_output 'SOON_PROMPT> '
 
 # Normal typing ignores the ghost suggestion instead of modifying the buffer.
 rm -f $accepted_file
-transcript=''
 wait_for_output "touch $accepted_file"
-transcript=''
 zpty -w soon_shell '[[ $SOON_LAST_LATENCY_MS == <->.<-> ]] && print -r -- SOON_TYPED_NORMALLY'
 wait_for_output 'SOON_TYPED_NORMALLY'
 wait_for_output 'SOON_PROMPT> '
@@ -152,27 +149,23 @@ wait_for_log '--outcome dismissed'
 }
 
 # Completed commands drive distinct Next-step and Repair predictions, while preserving `$?`.
-transcript=''
 zpty -w soon_shell 'true'
 wait_for_output 'SOON_PROMPT> '
 wait_for_log 'record-command --id'
 wait_for_log '--command true'
 wait_for_log '--exit-code 0'
 
-transcript=''
 zpty -w soon_shell 'false'
 wait_for_output 'SOON_PROMPT> '
 wait_for_output "touch $repair_file"
 wait_for_log '--command false'
 wait_for_log '--exit-code 1'
 
-transcript=''
 zpty -w soon_shell 'print -r -- "SOON_STATUS:$?"'
 wait_for_output 'SOON_STATUS:1'
 wait_for_output 'SOON_PROMPT> '
 
 # Invoking soon is a manual prediction trigger, not a command event to learn.
-transcript=''
 zpty -w soon_shell 'soon'
 wait_for_output 'SOON_PROMPT> '
 sleep 0.1
@@ -182,10 +175,8 @@ sleep 0.1
 }
 
 # Teardown removes hooks and cancels pending prediction work.
-transcript=''
 zpty -w soon_shell 'soon-disable'
 wait_for_output 'SOON_PROMPT> '
-transcript=''
 sleep 0.2
 local chunk=''
 while zpty -r -t soon_shell chunk; do
