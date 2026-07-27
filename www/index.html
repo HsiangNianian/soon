@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#edf0f5">
+    <meta
+      name="description"
+      content="soon is a local-first terminal agent that predicts, repairs, and suggests your next full command."
+    >
+    <title>soon — The next command, before you type it</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="soon home">
+        <span class="prompt-mark" aria-hidden="true">›</span>
+        soon
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#install">Install</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/HsiangNianian/soon">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">v0.4 beta · Zsh · local by default</p>
+          <h1 id="hero-title">Your terminal already knows what comes next.</h1>
+          <p class="lede">
+            soon learns recurring command transitions, then places one complete
+            prediction at an empty prompt. Accept it, edit it, or ignore it.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">Install the beta</a>
+            <a class="button button-secondary" href="https://github.com/HsiangNianian/soon/releases/tag/v0.4.0">
+              Read the v0.4 release
+            </a>
+          </div>
+
+          <ul class="boundary-list" aria-label="Product boundaries">
+            <li>No model required</li>
+            <li>No network on the default path</li>
+            <li>No automatic execution</li>
+          </ul>
+        </div>
+
+        <figure class="demo">
+          <img
+            src="/assets/soon-demo.svg"
+            alt="Animated terminal demo: soon repairs git psuh with git push, Control-F accepts it, and the user decides when to execute."
+            width="1200"
+            height="675"
+          >
+          <figcaption>
+            <span>Repair → accept → next step</span>
+            <button class="replay-button" type="button" data-replay>Replay 18s</button>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="trace-section" aria-labelledby="trace-title">
+        <div class="section-intro">
+          <p class="eyebrow">The local loop</p>
+          <h2 id="trace-title">A command trace, not a chat.</h2>
+          <p>
+            soon watches the lifecycle your shell already exposes. It keeps
+            prediction in the prompt, where the next action actually happens.
+          </p>
+        </div>
+
+        <ol class="trace">
+          <li>
+            <span class="trace-node" aria-hidden="true">01</span>
+            <div>
+              <h3>Observe the result</h3>
+              <p>A successful command asks for a next step. A failure asks for a repair.</p>
+            </div>
+            <code>exit 0 / exit 1</code>
+          </li>
+          <li>
+            <span class="trace-node" aria-hidden="true">02</span>
+            <div>
+              <h3>Recall a safe pattern</h3>
+              <p>Local command transitions produce one complete, filtered candidate.</p>
+            </div>
+            <code>history → rank</code>
+          </li>
+          <li>
+            <span class="trace-node" aria-hidden="true">03</span>
+            <div>
+              <h3>Leave the decision to you</h3>
+              <p>Ctrl-F copies the ghost text into the buffer. Enter is still yours.</p>
+            </div>
+            <code>suggest ≠ execute</code>
+          </li>
+        </ol>
+      </section>
+
+      <section class="install-section" id="install" aria-labelledby="install-title">
+        <div class="section-intro">
+          <p class="eyebrow">Three commands</p>
+          <h2 id="install-title">Meet the next prompt.</h2>
+          <p>
+            Install the same v0.4 release from Cargo or PyPI, then opt in for
+            the current Zsh session.
+          </p>
+        </div>
+
+        <div class="install-grid">
+          <article class="install-card">
+            <div class="install-card-heading">
+              <h3>Cargo</h3>
+              <span>Rust toolchain</span>
+            </div>
+            <div class="command-row">
+              <code>cargo install soon</code>
+              <button type="button" data-copy="cargo install soon">Copy</button>
+            </div>
+          </article>
+
+          <article class="install-card">
+            <div class="install-card-heading">
+              <h3>PyPI</h3>
+              <span>Python 3.10+</span>
+            </div>
+            <div class="command-row">
+              <code>python -m pip install soon-bin</code>
+              <button type="button" data-copy="python -m pip install soon-bin">Copy</button>
+            </div>
+          </article>
+
+          <article class="install-card install-card-wide">
+            <div class="install-card-heading">
+              <h3>Enable Zsh</h3>
+              <span>Current session</span>
+            </div>
+            <div class="command-row">
+              <code>eval "$(soon init zsh)"</code>
+              <button type="button" data-copy='eval "$(soon init zsh)"'>Copy</button>
+            </div>
+          </article>
+        </div>
+
+        <p class="install-note">
+          Add the same eval line to <code>~/.zshrc</code> to keep it enabled.
+          Press <code>Ctrl-F</code> when a suggestion is visible.
+        </p>
+      </section>
+
+      <section class="privacy-section" id="privacy" aria-labelledby="privacy-title">
+        <div class="privacy-copy">
+          <p class="eyebrow">Private memory</p>
+          <h2 id="privacy-title">Your history stays useful without becoming a payload.</h2>
+          <p>
+            The default predictor and replay tools run locally. Likely secrets
+            are rejected before storage, ranking, or display, and inspection
+            reports aggregate counts instead of command text.
+          </p>
+          <a class="text-link" href="https://github.com/HsiangNianian/soon#privacy">
+            Read the privacy contract
+          </a>
+        </div>
+
+        <div class="privacy-ledger" aria-label="Default data flow">
+          <div>
+            <span>01</span>
+            <strong>Shell event</strong>
+            <small>local</small>
+          </div>
+          <div>
+            <span>02</span>
+            <strong>Sensitive filter</strong>
+            <small>before storage</small>
+          </div>
+          <div>
+            <span>03</span>
+            <strong>One suggestion</strong>
+            <small>editable text</small>
+          </div>
+          <p>Network boundary: not crossed by default.</p>
+        </div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <p class="eyebrow">The contract</p>
+        <h2 id="closing-title">soon proposes. You decide.</h2>
+        <div>
+          <a class="button button-primary" href="https://github.com/HsiangNianian/soon">View the source</a>
+          <a class="text-link" href="https://github.com/HsiangNianian/soon/issues/25">Follow the adoption sprint</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>soon is MIT-licensed and currently in beta.</p>
+      <div>
+        <a href="https://crates.io/crates/soon">crates.io</a>
+        <a href="https://pypi.org/project/soon-bin/">PyPI</a>
+        <a href="https://github.com/users/HsiangNianian/projects/7">Roadmap</a>
+      </div>
+    </footer>
+  </body>
+</html>

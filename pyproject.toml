@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/HsiangNianian/soon"
+Homepage = "https://soon.hydroroll.team"
 Repository = "https://github.com/HsiangNianian/soon"
 Issues = "https://github.com/HsiangNianian/soon/issues"
 
