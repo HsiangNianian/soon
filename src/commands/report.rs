@@ -33,8 +33,8 @@ pub fn run(config: &AppConfig, json: bool) {
         report.suggestions.executed,
         report.suggestions.execution_percent,
     );
-    print_latency("p50", report.latency_ms.p50);
-    print_latency("p95", report.latency_ms.p95);
+    print_latency_distribution("Replay", &report.latency_ms.replay);
+    print_latency_distribution("Suggestion", &report.latency_ms.suggestion);
     println!("Privacy: aggregate metrics only; no command text or paths included.");
 }
 
@@ -46,10 +46,18 @@ fn print_outcome(label: &str, count: usize, percent: Option<f64>) {
     }
 }
 
-fn print_latency(label: &str, latency_ms: Option<f64>) {
-    if let Some(latency_ms) = latency_ms {
-        println!("{label} latency: {latency_ms:.3} ms");
+fn print_latency_distribution(label: &str, latency: &report::LatencyDistribution) {
+    if let (Some(p50), Some(p95)) = (latency.p50, latency.p95) {
+        let unit = if latency.samples == 1 {
+            "sample"
+        } else {
+            "samples"
+        };
+        println!(
+            "{label} latency: p50={p50:.3} ms p95={p95:.3} ms ({} {unit})",
+            latency.samples,
+        );
     } else {
-        println!("{label} latency: n/a");
+        println!("{label} latency: n/a (0 samples)");
     }
 }

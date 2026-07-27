@@ -73,6 +73,7 @@ def main() -> None:
     assert "cargo install soon" in html
     assert "python -m pip install soon-bin" in html
     assert 'eval "$(soon init zsh)"' in html
+    assert "v0.4.1" in html
     assert "No automatic execution" in html
 
     for attribute, reference in parser.references:

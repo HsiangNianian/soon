@@ -94,7 +94,7 @@ struct CandidateScore {
     latest_index: usize,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct EventStats {
     pub command_events: usize,
     pub suggestion_events: usize,
@@ -103,6 +103,9 @@ pub struct EventStats {
     pub executed: usize,
     pub dismissed: usize,
     pub malformed_lines: usize,
+    pub shown_latency_samples: usize,
+    pub shown_p50_latency_ms: Option<f64>,
+    pub shown_p95_latency_ms: Option<f64>,
 }
 
 pub fn event_store_path() -> PathBuf {
@@ -207,13 +210,19 @@ pub fn inspect() -> EventStats {
     };
 
     let mut stats = EventStats::default();
+    let mut shown_latencies_ms = Vec::new();
     for line in BufReader::new(file).lines().map_while(Result::ok) {
         match serde_json::from_str::<StoredEvent>(&line) {
             Ok(StoredEvent::Command(_)) => stats.command_events += 1,
             Ok(StoredEvent::Suggestion(event)) => {
                 stats.suggestion_events += 1;
                 match event.outcome {
-                    SuggestionOutcome::Shown => stats.shown += 1,
+                    SuggestionOutcome::Shown => {
+                        stats.shown += 1;
+                        if event.latency_ms.is_finite() && !event.latency_ms.is_sign_negative() {
+                            shown_latencies_ms.push(event.latency_ms);
+                        }
+                    }
                     SuggestionOutcome::Accepted => stats.accepted += 1,
                     SuggestionOutcome::Executed => stats.executed += 1,
                     SuggestionOutcome::Dismissed => stats.dismissed += 1,
@@ -222,7 +231,19 @@ pub fn inspect() -> EventStats {
             Err(_) => stats.malformed_lines += 1,
         }
     }
+    shown_latencies_ms.sort_by(f64::total_cmp);
+    stats.shown_latency_samples = shown_latencies_ms.len();
+    stats.shown_p50_latency_ms = percentile(&shown_latencies_ms, 0.50);
+    stats.shown_p95_latency_ms = percentile(&shown_latencies_ms, 0.95);
     stats
+}
+
+fn percentile(sorted_values: &[f64], percentile: f64) -> Option<f64> {
+    if sorted_values.is_empty() {
+        return None;
+    }
+    let rank = (percentile * sorted_values.len() as f64).ceil() as usize;
+    Some(sorted_values[rank.saturating_sub(1).min(sorted_values.len() - 1)])
 }
 
 pub fn clear() -> Result<(), String> {

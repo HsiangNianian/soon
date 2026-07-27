@@ -11,11 +11,11 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 [![CI](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Website](https://soon.hydroroll.team) · [v0.4 release](https://github.com/HsiangNianian/soon/releases/tag/v0.4.0) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
+[Website](https://soon.hydroroll.team) · [v0.4.1 adoption build](https://github.com/HsiangNianian/soon/releases/tag/v0.4.1) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
 
 </div>
 
-> **Beta status:** v0.4 ships the first opt-in Zsh ghost-suggestion loop. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
+> **Beta status:** v0.4.1 ships the first opt-in Zsh ghost-suggestion loop plus a privacy-safe adoption report. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
 
 <a href="https://soon.hydroroll.team">
   <img src="www/assets/soon-demo.svg" alt="An 18-second terminal demo: a failed Git command triggers a local Repair suggestion, Ctrl-F accepts it into the editable buffer, and the user decides when to execute it.">
@@ -23,7 +23,7 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 
 ## Try the beta
 
-Install the same v0.4 release through Cargo or PyPI:
+Install the same v0.4.1 release through Cargo or PyPI:
 
 ```bash
 cargo install soon
@@ -224,11 +224,11 @@ soon report
 soon report --json
 ```
 
-This is an explicit, offline read of the same local event store. Both forms contain aggregate counters and latency distributions only—never raw commands, arguments, paths, hostnames, usernames, event IDs, timestamps, or database rows. The human form is designed for an issue or discussion; `--json` is suitable for scripts and uses schema version `1`:
+This is an explicit, offline read of the same local event store. Both forms contain aggregate counters and latency distributions only—never raw commands, arguments, paths, hostnames, usernames, event IDs, timestamps, or database rows. The human form is designed for an issue or discussion; `--json` is suitable for scripts and uses schema version `2`:
 
 | JSON field | Meaning |
 |---|---|
-| `schema_version` | Report schema version; currently `1` |
+| `schema_version` | Report schema version; currently `2` |
 | `samples.eligible_transitions` | Linked command transitions eligible for chronological replay |
 | `samples.predictions` | Eligible transitions for which the deterministic replay produced a prediction |
 | `samples.prediction_coverage_percent` | `predictions / eligible_transitions * 100` |
@@ -237,9 +237,14 @@ This is an explicit, offline read of the same local event store. Both forms cont
 | `suggestions.acceptance_percent` | `accepted / shown * 100` |
 | `suggestions.executed` | Retained suggestion events with the `executed` outcome |
 | `suggestions.execution_percent` | `executed / shown * 100` |
-| `latency_ms.p50`, `latency_ms.p95` | Replay prediction latency percentiles in milliseconds |
+| `latency_ms.replay.samples` | Eligible transitions benchmarked by chronological replay |
+| `latency_ms.replay.p50`, `latency_ms.replay.p95` | Offline replay-computation percentiles in milliseconds |
+| `latency_ms.suggestion.samples` | Valid shell-observed latency samples from `shown` events |
+| `latency_ms.suggestion.p50`, `latency_ms.suggestion.p95` | Shell-observed suggestion-result percentiles in milliseconds |
 
-A percentage is `null` when its denominator is zero, and both latency values are `null` when there are no eligible transitions. Human output prints `n/a` for the same cases. This keeps empty and partially retained event stores valid without presenting missing observations as zero-latency measurements.
+A percentage is `null` when its denominator is zero. Each latency distribution has an explicit sample count and returns `null` percentiles when that count is zero. Suggestion latency counts only valid non-negative `shown` rows, so later accepted, executed, or dismissed outcomes do not duplicate one displayed suggestion. Human output prints `n/a` for unavailable distributions.
+
+Schema version 2 replaces the version 1 `latency_ms.p50` and `latency_ms.p95` fields with `latency_ms.replay` and `latency_ms.suggestion`. Use the suggestion distribution for user-facing adoption studies and the replay distribution for policy benchmarking.
 
 Config lives at `~/.config/soon/config.toml`:
 
