@@ -8,6 +8,7 @@ mod learn;
 mod predict;
 mod privacy;
 mod replay;
+mod report;
 mod shell;
 
 use clap::Parser;
@@ -36,6 +37,7 @@ fn main() {
         Some(Commands::Config { action }) => commands::config::run(action),
         Some(Commands::Events { action }) => commands::events::run(action, &config),
         Some(Commands::Replay) => commands::replay::run(&config),
+        Some(Commands::Report { json }) => commands::report::run(&config, json),
         Some(Commands::Update) => commands::update::run(&config),
         Some(Commands::Learn { action }) => {
             // Learn works even with unknown shell (ingest-all detects automatically)

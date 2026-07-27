@@ -63,6 +63,12 @@ pub enum Commands {
     },
     /// Measure local prediction quality with chronological event replay
     Replay,
+    /// Print a privacy-safe local adoption report
+    Report {
+        /// Emit the stable machine-readable schema
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
