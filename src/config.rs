@@ -201,7 +201,7 @@ impl AppConfig {
                     .collect();
             }
             "update.channel" => {
-                let valid = ["auto", "cargo", "pip", "aur", "binary"];
+                let valid = ["auto", "cargo", "pip"];
                 if !valid.contains(&value) {
                     return Err(format!(
                         "Invalid channel: {}. Valid: {}",
@@ -276,4 +276,18 @@ fn parse_list(value: &str) -> Vec<String> {
         .filter(|value| !value.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_configuration_accepts_only_published_beta_channels() {
+        let mut config = AppConfig::default();
+        assert!(config.set_value("update.channel", "cargo").is_ok());
+        assert!(config.set_value("update.channel", "pip").is_ok());
+        assert!(config.set_value("update.channel", "aur").is_err());
+        assert!(config.set_value("update.channel", "binary").is_err());
+    }
 }

@@ -54,6 +54,8 @@ The published Cargo package is the primary release channel:
 cargo install soon
 ```
 
+Before the v0.4 tag, Cargo remains on `0.3.0`; the Git install below is the beta candidate. The legacy PyPI and AUR packages remain on `0.1.9` and are not supported for beta testing. v0.4 will publish Cargo and PyPI from the same tag; AUR and standalone binaries remain explicitly unsupported until they have their own tested artifact workflow.
+
 To try the current repository behavior before the next release:
 
 ```bash
@@ -80,7 +82,7 @@ The last background prediction latency is available without printing command con
 print -r -- "$SOON_LAST_LATENCY_MS ms"
 ```
 
-PyPI and AUR distributions are being reconciled as part of the [v0.4 release issue](https://github.com/HsiangNianian/soon/issues/12) and are not advertised as primary channels for this prototype.
+The supported interactive beta surface is Zsh on Linux and macOS. Other history parsers and packaged platforms remain on-demand or experimental surfaces rather than a claim of complete shell integration. Maintainer release guarantees are documented in [RELEASING.md](RELEASING.md).
 
 ## Use the current prototype
 
@@ -215,6 +217,7 @@ soon config init
 soon config path
 soon config get general.ngram
 soon config set general.ngram 5
+soon config set update.channel cargo  # or pip
 ```
 
 ## Commands
