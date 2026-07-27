@@ -25,3 +25,7 @@ command = ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings
 [[verify.checks]]
 name = "cli-smoke"
 command = ["cargo", "run", "--locked", "--", "--version"]
+
+[[verify.checks]]
+name = "site-smoke"
+command = ["python3", "tests/site_smoke.py"]

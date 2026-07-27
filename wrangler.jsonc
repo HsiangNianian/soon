@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "soon-site",
+  "compatibility_date": "2026-07-27",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "soon.hydroroll.team",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./www"
+  }
+}
