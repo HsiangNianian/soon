@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" role="img" aria-labelledby="title desc">
+  <title id="title">soon terminal proof</title>
+  <desc id="desc">A dark square launch card shows a failed Git command repaired locally, accepted with Control-F, and followed by the next workflow command.</desc>
+  <defs>
+    <pattern id="ticks" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M0 24V0H24" fill="none" stroke="#353845" stroke-width="1"/>
+    </pattern>
+    <style>
+      .display { font-family: "Avenir Next Condensed", "Arial Narrow", sans-serif; font-weight: 800; }
+      .body { font-family: "Avenir Next", Inter, sans-serif; }
+      .mono { font-family: "SFMono-Regular", "Cascadia Code", monospace; }
+      .caps { font-weight: 700; letter-spacing: .12em; }
+    </style>
+  </defs>
+  <rect width="1080" height="1080" fill="#171821"/>
+  <rect width="1080" height="1080" fill="url(#ticks)" opacity=".55"/>
+  <rect x="54" y="48" width="124" height="44" rx="22" fill="#3157ff"/>
+  <text x="116" y="78" text-anchor="middle" fill="#fff" class="body caps" font-size="18">SOON</text>
+  <text x="205" y="78" fill="#8d93a4" class="body caps" font-size="17">V0.4.1 · LOCAL ZSH AGENT</text>
+
+  <text x="54" y="180" fill="#f5f6fb" class="display" font-size="68">FAILURE REPAIRED.</text>
+  <text x="54" y="247" fill="#8da6ff" class="display" font-size="68">WORKFLOW RESUMED.</text>
+
+  <g transform="translate(54 306)">
+    <rect width="972" height="520" rx="22" fill="#20212a" stroke="#414452" stroke-width="2"/>
+    <path d="M22 0H950a22 22 0 0 1 22 22v54H0V22A22 22 0 0 1 22 0z" fill="#2b2d38"/>
+    <circle cx="35" cy="38" r="8" fill="#ff786c"/>
+    <circle cx="63" cy="38" r="8" fill="#f4c45c"/>
+    <circle cx="91" cy="38" r="8" fill="#66d38c"/>
+    <text x="486" y="46" text-anchor="middle" fill="#8d93a4" class="mono" font-size="18">~/work/soon — zsh</text>
+
+    <rect x="40" y="108" width="105" height="34" rx="17" fill="#4a2d28"/>
+    <text x="92" y="131" text-anchor="middle" fill="#ff9168" class="mono caps" font-size="13">EXIT 1</text>
+    <text x="40" y="190" fill="#b8f4d2" class="mono" font-size="27">›</text>
+    <text x="79" y="190" fill="#f5f6fb" class="mono" font-size="27">git psuh</text>
+    <text x="40" y="234" fill="#ff9168" class="mono" font-size="20">git: ‘psuh’ is not a git command.</text>
+
+    <text x="40" y="306" fill="#b8f4d2" class="mono" font-size="27">›</text>
+    <text x="79" y="306" fill="#8d93a4" class="mono" font-size="27">git push</text>
+    <rect x="678" y="269" width="246" height="48" rx="24" fill="#4a2d28"/>
+    <text x="801" y="300" text-anchor="middle" fill="#ff9168" class="mono caps" font-size="15">REPAIR · 6.8 MS</text>
+
+    <rect x="40" y="352" width="116" height="54" rx="11" fill="#3157ff"/>
+    <text x="98" y="387" text-anchor="middle" fill="#fff" class="mono" font-size="18" font-weight="700">Ctrl-F</text>
+    <text x="179" y="386" fill="#f5f6fb" class="mono" font-size="18">puts it in the editable buffer</text>
+
+    <path d="M40 440H932" stroke="#414452"/>
+    <text x="40" y="481" fill="#8da6ff" class="mono caps" font-size="15">NEXT STEP</text>
+    <text x="191" y="481" fill="#f5f6fb" class="mono" font-size="20">gh pr checks --watch</text>
+    <text x="932" y="481" text-anchor="end" fill="#8d93a4" class="mono" font-size="16">local · 7.1 ms</text>
+  </g>
+
+  <rect x="54" y="872" width="972" height="106" rx="16" fill="#edf0f5"/>
+  <text x="80" y="916" fill="#171821" class="body caps" font-size="16">GHOST TEXT, NOT AUTOPILOT</text>
+  <text x="80" y="953" fill="#373b48" class="body" font-size="22">Review it. Edit it. Run it only when you choose.</text>
+  <text x="1026" y="1030" text-anchor="end" fill="#8da6ff" class="mono" font-size="17">github.com/HsiangNianian/soon</text>
+</svg>

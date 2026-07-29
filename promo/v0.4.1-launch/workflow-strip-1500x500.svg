@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" role="img" aria-labelledby="title desc">
+  <title id="title">soon workflow strip</title>
+  <desc id="desc">A three-step banner shows a failed command, a local repair, and the next workflow command, with the main content clear of the profile avatar area.</desc>
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#cfd5e3" stroke-width="1"/>
+    </pattern>
+    <style>
+      .display { font-family: "Avenir Next Condensed", "Arial Narrow", sans-serif; font-weight: 800; }
+      .body { font-family: "Avenir Next", Inter, sans-serif; }
+      .mono { font-family: "SFMono-Regular", "Cascadia Code", monospace; }
+      .caps { font-weight: 700; letter-spacing: .11em; }
+    </style>
+  </defs>
+  <rect width="1500" height="500" fill="#edf0f5"/>
+  <rect width="1500" height="500" fill="url(#grid)" opacity=".7"/>
+  <rect x="0" y="0" width="236" height="500" fill="#3157ff"/>
+  <text transform="translate(86 376) rotate(-90)" fill="#fff" class="display" font-size="84">SOON</text>
+  <text transform="translate(150 390) rotate(-90)" fill="#cbd5ff" class="body caps" font-size="15">V0.4.1 · LOCAL-FIRST</text>
+
+  <text x="286" y="79" fill="#171821" class="display" font-size="50">THE NEXT COMMAND IS ALREADY IN THE FLOW.</text>
+  <text x="288" y="115" fill="#555b6b" class="body" font-size="20">Full-command prediction for Zsh · local by default · Enter stays yours</text>
+
+  <g transform="translate(286 158)">
+    <rect width="340" height="226" rx="16" fill="#20212a" stroke="#171821" stroke-width="2"/>
+    <rect x="24" y="24" width="92" height="32" rx="16" fill="#4a2d28"/>
+    <text x="70" y="46" text-anchor="middle" fill="#ff9168" class="mono caps" font-size="12">01 · EXIT 1</text>
+    <text x="24" y="105" fill="#b8f4d2" class="mono" font-size="22">›</text>
+    <text x="56" y="105" fill="#f5f6fb" class="mono" font-size="22">git psuh</text>
+    <text x="24" y="143" fill="#ff9168" class="mono" font-size="15">not a git command</text>
+    <text x="24" y="193" fill="#8d93a4" class="body" font-size="16">soon observes the lifecycle locally.</text>
+  </g>
+
+  <path d="M640 271H676" stroke="#3157ff" stroke-width="5"/>
+  <path d="M667 261L679 271L667 281" fill="none" stroke="#3157ff" stroke-width="5"/>
+
+  <g transform="translate(694 158)">
+    <rect width="340" height="226" rx="16" fill="#f8f9fc" stroke="#171821" stroke-width="2"/>
+    <rect x="24" y="24" width="114" height="32" rx="16" fill="#f0d4c9"/>
+    <text x="81" y="46" text-anchor="middle" fill="#a23e1b" class="mono caps" font-size="12">02 · REPAIR</text>
+    <text x="24" y="105" fill="#3157ff" class="mono" font-size="25" font-weight="700">git push</text>
+    <text x="24" y="143" fill="#a23e1b" class="mono" font-size="15">local · 6.8 ms</text>
+    <rect x="24" y="166" width="82" height="38" rx="9" fill="#3157ff"/>
+    <text x="65" y="191" text-anchor="middle" fill="#fff" class="mono" font-size="14" font-weight="700">Ctrl-F</text>
+    <text x="121" y="190" fill="#373b48" class="body" font-size="16">accepts to edit</text>
+  </g>
+
+  <path d="M1048 271H1084" stroke="#3157ff" stroke-width="5"/>
+  <path d="M1075 261L1087 271L1075 281" fill="none" stroke="#3157ff" stroke-width="5"/>
+
+  <g transform="translate(1102 158)">
+    <rect width="340" height="226" rx="16" fill="#20212a" stroke="#171821" stroke-width="2"/>
+    <rect x="24" y="24" width="132" height="32" rx="16" fill="#2c3350"/>
+    <text x="90" y="46" text-anchor="middle" fill="#8da6ff" class="mono caps" font-size="12">03 · NEXT STEP</text>
+    <text x="24" y="105" fill="#b8f4d2" class="mono" font-size="22">›</text>
+    <text x="56" y="105" fill="#f5f6fb" class="mono" font-size="18">gh pr checks --watch</text>
+    <text x="24" y="143" fill="#8da6ff" class="mono" font-size="15">local · 7.1 ms</text>
+    <text x="24" y="193" fill="#8d93a4" class="body" font-size="16">No model or network by default.</text>
+  </g>
+
+  <text x="286" y="438" fill="#171821" class="body caps" font-size="16">FAILURE REPAIRED · WORKFLOW RESUMED</text>
+  <text x="1442" y="438" text-anchor="end" fill="#3157ff" class="mono" font-size="16" font-weight="700">github.com/HsiangNianian/soon</text>
+</svg>

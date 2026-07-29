@@ -40,6 +40,8 @@ At an empty prompt, soon computes in the background and renders one dim full-com
 
 The default prediction path uses local history, not a model or network service. It can choose a Next-step suggestion after success, a Repair suggestion after failure, or predict on demand when you run `soon`.
 
+> **Help validate the beta:** join the [ten-user Zsh pilot](https://github.com/HsiangNianian/soon/issues/27). The study asks for privacy-safe aggregate counters and qualitative feedback, never raw command text.
+
 ## The idea
 
 Your shell already knows what you typed. soon asks a different question: given the workflow you just followed, what complete command are you likely to run next?
