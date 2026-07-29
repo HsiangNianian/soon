@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crate::config::AppConfig;
 use crate::events::{self, CommandEvent, SCHEMA_VERSION};
 use crate::privacy;
+use crate::shell::zsh::{decode_history_line, DecodedHistoryEntry};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportStats {
@@ -71,7 +72,7 @@ fn prepare_zsh(
                 previous_event_id = None;
                 continue;
             };
-            match parse_zsh_line(line) {
+            match decode_history_line(line) {
                 Ok(Some(entry)) => {
                     if entry.command.chars().any(char::is_control) {
                         stats.malformed += 1;
@@ -111,47 +112,7 @@ fn prepare_zsh(
     Ok((stats, commands))
 }
 
-struct ZshEntry<'a> {
-    command: &'a str,
-    started_at_ms: Option<i64>,
-    duration_ms: Option<u64>,
-}
-
-fn parse_zsh_line(line: &str) -> Result<Option<ZshEntry<'_>>, ()> {
-    let line = line.trim();
-    if line.is_empty() {
-        return Ok(None);
-    }
-
-    if let Some(metadata_and_command) = line.strip_prefix(": ") {
-        if let Some((metadata, command)) = metadata_and_command.split_once(';') {
-            if metadata.contains(':') {
-                let (timestamp, duration) = metadata.split_once(':').ok_or(())?;
-                let timestamp = timestamp.parse::<i64>().map_err(|_| ())?;
-                let duration = duration.parse::<u64>().map_err(|_| ())?;
-                let started_at_ms = timestamp.checked_mul(1000).ok_or(())?;
-                let duration_ms = duration.checked_mul(1000).ok_or(())?;
-                let command = command.trim();
-                if command.is_empty() {
-                    return Err(());
-                }
-                return Ok(Some(ZshEntry {
-                    command,
-                    started_at_ms: Some(started_at_ms),
-                    duration_ms: Some(duration_ms),
-                }));
-            }
-        }
-    }
-
-    Ok(Some(ZshEntry {
-        command: line,
-        started_at_ms: None,
-        duration_ms: None,
-    }))
-}
-
-fn stable_event_id(entry: &ZshEntry<'_>, previous_event_id: Option<&str>) -> String {
+fn stable_event_id(entry: &DecodedHistoryEntry<'_>, previous_event_id: Option<&str>) -> String {
     let material = format!(
         "{}\0{}\0{}\0{}",
         entry

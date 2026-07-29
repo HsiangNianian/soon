@@ -94,6 +94,76 @@ fn raw_prediction_uses_the_submitted_command_as_context() {
 }
 
 #[test]
+fn manual_prediction_preserves_plain_commands_containing_semicolons() {
+    let home = isolated_home();
+    std::fs::write(
+        home.join(".zsh_history"),
+        concat!(
+            "git status\n",
+            "printf before; echo after\n",
+            "echo first-break\n",
+            "git diff\n",
+            "printf before; echo after\n",
+            "echo second-break\n",
+            "git log\n",
+            "cargo test --workspace\n",
+            "git show\n",
+        ),
+    )
+    .expect("write Zsh history");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_soon"))
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .args(["--shell", "zsh", "--ngram", "1", "now"])
+        .output()
+        .expect("run manual prediction");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 prediction");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        output.status.success(),
+        "manual prediction failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("printf before; echo after"), "{stdout}");
+}
+
+#[test]
+fn manual_prediction_decodes_extended_history_metadata() {
+    let home = isolated_home();
+    std::fs::write(
+        home.join(".zsh_history"),
+        concat!(
+            ": 1720000000:1;git status\n",
+            ": 1720000001:1;cargo test --workspace\n",
+            ": 1720000002:1;echo break\n",
+            ": 1720000003:1;git diff\n",
+            ": 1720000004:1;cargo test --workspace\n",
+            ": 1720000005:1;git show\n",
+        ),
+    )
+    .expect("write extended Zsh history");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_soon"))
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .args(["--shell", "zsh", "--ngram", "1", "now"])
+        .output()
+        .expect("run manual prediction");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 prediction");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(
+        output.status.success(),
+        "manual prediction failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("cargo test --workspace"), "{stdout}");
+    assert!(!stdout.contains("1720000001:1"), "{stdout}");
+}
+
+#[test]
 fn debug_output_does_not_print_sensitive_history_text() {
     let home = isolated_home();
     let secret = "debug-secret-value";
