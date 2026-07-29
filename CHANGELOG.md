@@ -2,6 +2,25 @@
 
 All notable changes to soon are documented here.
 
+## 0.4.2 - 2026-07-29
+
+soon 0.4.2 is a focused Zsh history-correctness patch. It keeps compound
+commands intact across manual prediction and event import while preserving the
+existing extended-history metadata behavior.
+
+### Fixed
+
+- Preserve plain Zsh history commands containing semicolons by sharing one
+  decoder between on-demand prediction and event import
+  ([#36](https://github.com/HsiangNianian/soon/pull/36)).
+
+### Documentation
+
+- Added the reusable v0.4.1 launch kit and its rendered campaign assets
+  ([#33](https://github.com/HsiangNianian/soon/pull/33)).
+
+[Full diff](https://github.com/HsiangNianian/soon/compare/v0.4.1...v0.4.2)
+
 ## 0.4.1 - 2026-07-27
 
 soon 0.4.1 is the adoption build for the local terminal-agent beta. It makes

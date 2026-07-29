@@ -1,6 +1,6 @@
 [package]
 name = "soon"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Local-first prediction for your next full shell command"
 license = "MIT"
