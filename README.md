@@ -11,11 +11,11 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 [![CI](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Website](https://soon.hydroroll.team) · [v0.4.1 adoption build](https://github.com/HsiangNianian/soon/releases/tag/v0.4.1) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
+[Website](https://soon.hydroroll.team) · [v0.4.2 Zsh parser patch](https://github.com/HsiangNianian/soon/releases/tag/v0.4.2) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
 
 </div>
 
-> **Beta status:** v0.4.1 ships the first opt-in Zsh ghost-suggestion loop plus a privacy-safe adoption report. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
+> **Beta status:** v0.4.2 ships the opt-in Zsh ghost-suggestion loop, a privacy-safe adoption report, and correct handling for compound commands in Zsh history. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
 
 <a href="https://soon.hydroroll.team">
   <img src="www/assets/soon-demo.svg" alt="An 18-second terminal demo: a failed Git command triggers a local Repair suggestion, Ctrl-F accepts it into the editable buffer, and the user decides when to execute it.">
@@ -23,7 +23,7 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 
 ## Try the beta
 
-Install the same v0.4.1 release through Cargo or PyPI:
+Install the same v0.4.2 release through Cargo or PyPI:
 
 ```bash
 cargo install soon
