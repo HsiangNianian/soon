@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 675" role="img" aria-labelledby="title desc">
+  <title id="title">soon 15-second launch demo frames</title>
+  <desc id="desc">Four frames show a mistyped command, a local repair, explicit Control-F acceptance, and a next-step prediction.</desc>
+  <defs>
+    <style>
+      .mono { font-family: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace; }
+      .body { font-family: "Avenir Next", Inter, sans-serif; }
+      .muted { fill: #8d93a4; }
+      .copy { fill: #f5f6fb; }
+      .prompt { fill: #b8f4d2; }
+      .repair { fill: #ff9168; }
+      .next { fill: #8da6ff; }
+      .terminal { font-size: 27px; }
+      .small { font-size: 20px; }
+      .label { font-size: 18px; font-weight: 700; letter-spacing: .09em; }
+    </style>
+    <g id="terminal-window">
+      <rect x="1" y="1" width="1198" height="673" rx="22" fill="#20212a" stroke="#0f1016" stroke-width="2"/>
+      <path d="M23 1h1154a22 22 0 0 1 22 22v58H1V23A22 22 0 0 1 23 1z" fill="#2b2d38"/>
+      <circle cx="36" cy="41" r="9" fill="#ff786c"/>
+      <circle cx="66" cy="41" r="9" fill="#f4c45c"/>
+      <circle cx="96" cy="41" r="9" fill="#66d38c"/>
+      <text x="600" y="49" text-anchor="middle" class="mono muted small">~/work/soon — zsh</text>
+      <rect x="100" y="642" width="1000" height="5" rx="2.5" fill="#353845"/>
+    </g>
+    <g id="launch-badge">
+      <rect x="963" y="105" width="151" height="34" rx="17" fill="#3157ff"/>
+      <text x="1038" y="128" text-anchor="middle" fill="#fff" class="body" font-size="14" font-weight="700" letter-spacing=".09em">V0.4.1 BETA</text>
+    </g>
+  </defs>
+
+  <g>
+    <use href="#terminal-window"/>
+    <use href="#launch-badge"/>
+    <rect x="84" y="111" width="176" height="38" rx="19" fill="#353845"/>
+    <text x="172" y="136" text-anchor="middle" class="mono muted label">COMMAND</text>
+    <text x="86" y="207" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="207" class="mono copy terminal">git psuh</text>
+    <rect x="440" y="181" width="13" height="32" rx="2" fill="#f5f6fb"/>
+    <rect x="86" y="269" width="92" height="49" rx="10" fill="#3157ff"/>
+    <text x="132" y="300" text-anchor="middle" fill="#fff" class="mono" font-size="16" font-weight="700">Enter</text>
+    <text x="196" y="299" class="mono copy small">runs the command.</text>
+    <text x="86" y="562" class="mono muted small">soon observes the command lifecycle locally.</text>
+    <rect x="100" y="642" width="250" height="5" rx="2.5" fill="#8da6ff"/>
+  </g>
+
+  <g transform="translate(1200 0)">
+    <use href="#terminal-window"/>
+    <use href="#launch-badge"/>
+    <rect x="84" y="111" width="164" height="38" rx="19" fill="#4a2d28"/>
+    <text x="166" y="136" text-anchor="middle" class="mono repair label">EXIT 1</text>
+    <text x="86" y="207" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="207" class="mono copy terminal">git psuh</text>
+    <text x="86" y="259" class="mono repair small">git: ‘psuh’ is not a git command.</text>
+    <text x="86" y="337" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="337" class="mono muted terminal">git push</text>
+    <rect x="852" y="304" width="262" height="45" rx="22.5" fill="#4a2d28"/>
+    <text x="983" y="333" text-anchor="middle" class="mono repair label">REPAIR · 6.8 MS</text>
+    <text x="86" y="562" class="mono muted small">A correction from local history appears as editable ghost text.</text>
+    <rect x="100" y="642" width="500" height="5" rx="2.5" fill="#8da6ff"/>
+  </g>
+
+  <g transform="translate(2400 0)">
+    <use href="#terminal-window"/>
+    <use href="#launch-badge"/>
+    <rect x="84" y="111" width="188" height="38" rx="19" fill="#273d33"/>
+    <text x="178" y="136" text-anchor="middle" class="mono prompt label">ACCEPTED</text>
+    <text x="86" y="207" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="207" class="mono copy terminal">git push</text>
+    <rect x="440" y="181" width="13" height="32" rx="2" fill="#f5f6fb"/>
+    <rect x="86" y="274" width="138" height="55" rx="12" fill="#3157ff"/>
+    <text x="155" y="310" text-anchor="middle" class="mono copy small" font-weight="700">Ctrl-F</text>
+    <text x="248" y="309" class="mono copy small">places the suggestion in the buffer.</text>
+    <text x="86" y="562" class="mono muted small">Nothing executes automatically. Edit it, run it, or clear it.</text>
+    <rect x="100" y="642" width="750" height="5" rx="2.5" fill="#8da6ff"/>
+  </g>
+
+  <g transform="translate(3600 0)">
+    <use href="#terminal-window"/>
+    <use href="#launch-badge"/>
+    <rect x="84" y="111" width="174" height="38" rx="19" fill="#2c3350"/>
+    <text x="171" y="136" text-anchor="middle" class="mono next label">NEXT STEP</text>
+    <text x="86" y="207" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="207" class="mono copy terminal">git push</text>
+    <text x="86" y="259" class="mono muted small">Everything up-to-date</text>
+    <text x="86" y="337" class="mono prompt terminal">~/work/soon ›</text>
+    <text x="310" y="337" class="mono muted terminal">gh pr checks --watch</text>
+    <rect x="820" y="304" width="294" height="45" rx="22.5" fill="#2c3350"/>
+    <text x="967" y="333" text-anchor="middle" class="mono next label">LOCAL · 7.1 MS</text>
+    <text x="86" y="466" class="mono copy small">Failure repaired. Workflow resumed. The next command is ready.</text>
+    <text x="86" y="562" class="mono muted small">15-second cut · default path uses no model and no network</text>
+    <rect x="100" y="642" width="1000" height="5" rx="2.5" fill="#8da6ff"/>
+  </g>
+</svg>

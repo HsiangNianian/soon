@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">soon repair receipt</title>
+  <desc id="desc">A paper-style launch card shows git psuh corrected to git push beside a local Zsh terminal repair.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#cfd5e3" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="10" dy="12" stdDeviation="0" flood-color="#3157ff" flood-opacity="1"/>
+    </filter>
+    <style>
+      .display { font-family: "Avenir Next Condensed", "Arial Narrow", sans-serif; font-weight: 800; }
+      .body { font-family: "Avenir Next", Inter, sans-serif; }
+      .mono { font-family: "SFMono-Regular", "Cascadia Code", monospace; }
+      .caps { font-size: 17px; font-weight: 700; letter-spacing: .12em; }
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="#edf0f5"/>
+  <rect width="1280" height="720" fill="url(#grid)" opacity=".72"/>
+  <rect x="44" y="42" width="1172" height="624" rx="18" fill="#f8f9fc" stroke="#171821" stroke-width="3" filter="url(#shadow)"/>
+
+  <g transform="translate(78 76)">
+    <rect width="108" height="38" rx="19" fill="#3157ff"/>
+    <text x="54" y="26" text-anchor="middle" fill="#fff" class="body caps">SOON</text>
+    <text x="128" y="26" fill="#555b6b" class="body caps">V0.4.1 · ZSH BETA</text>
+  </g>
+
+  <g transform="translate(78 165)">
+    <text x="0" y="0" fill="#171821" class="display" font-size="54">THE TYPO WASN’T</text>
+    <text x="0" y="58" fill="#171821" class="display" font-size="54">THE END OF THE FLOW.</text>
+    <text x="2" y="140" fill="#747b8e" class="mono" font-size="34">git psuh</text>
+    <path d="M0 126L178 151" stroke="#d45a2b" stroke-width="9" stroke-linecap="round"/>
+    <text x="2" y="205" fill="#3157ff" class="mono" font-size="48" font-weight="700">git push</text>
+    <rect x="0" y="250" width="226" height="44" rx="22" fill="#f0d4c9"/>
+    <text x="113" y="279" text-anchor="middle" fill="#a23e1b" class="body caps">REPAIR · 6.8 MS</text>
+    <text x="0" y="352" fill="#373b48" class="body" font-size="22">Local history. Editable buffer.</text>
+    <text x="0" y="385" fill="#373b48" class="body" font-size="22">You still decide what runs.</text>
+  </g>
+
+  <g transform="translate(624 156)">
+    <rect width="530" height="384" rx="18" fill="#20212a" stroke="#111219" stroke-width="3"/>
+    <path d="M18 0H512a18 18 0 0 1 18 18v48H0V18A18 18 0 0 1 18 0z" fill="#2b2d38"/>
+    <circle cx="31" cy="33" r="7" fill="#ff786c"/>
+    <circle cx="55" cy="33" r="7" fill="#f4c45c"/>
+    <circle cx="79" cy="33" r="7" fill="#66d38c"/>
+    <text x="265" y="40" text-anchor="middle" fill="#8d93a4" class="mono" font-size="15">~/work/soon — zsh</text>
+    <text x="34" y="117" fill="#b8f4d2" class="mono" font-size="20">›</text>
+    <text x="62" y="117" fill="#f5f6fb" class="mono" font-size="20">git psuh</text>
+    <text x="34" y="158" fill="#ff9168" class="mono" font-size="17">git: ‘psuh’ is not a git command.</text>
+    <text x="34" y="219" fill="#b8f4d2" class="mono" font-size="20">›</text>
+    <text x="62" y="219" fill="#8d93a4" class="mono" font-size="20">git push</text>
+    <rect x="324" y="188" width="168" height="38" rx="19" fill="#4a2d28"/>
+    <text x="408" y="213" text-anchor="middle" fill="#ff9168" class="mono" font-size="14" font-weight="700">LOCAL · 6.8 MS</text>
+    <rect x="34" y="271" width="104" height="47" rx="10" fill="#3157ff"/>
+    <text x="86" y="301" text-anchor="middle" fill="#fff" class="mono" font-size="17" font-weight="700">Ctrl-F</text>
+    <text x="156" y="300" fill="#f5f6fb" class="mono" font-size="16">accepts into buffer</text>
+    <text x="34" y="354" fill="#8d93a4" class="mono" font-size="15">nothing auto-executes</text>
+  </g>
+
+  <path d="M78 598H1154" stroke="#171821" stroke-width="2"/>
+  <text x="78" y="634" fill="#171821" class="body caps">LOCAL-FIRST FULL-COMMAND PREDICTION</text>
+  <text x="1154" y="634" text-anchor="end" fill="#3157ff" class="mono" font-size="17" font-weight="700">github.com/HsiangNianian/soon</text>
+</svg>
