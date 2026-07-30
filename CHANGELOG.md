@@ -12,6 +12,11 @@ All notable changes to soon are documented here.
   chronological promotion comparison against the v0.4 baseline. It is the v0.5
   source default after passing the quality and latency gate; `v0.4-baseline`
   remains an explicit fallback ([#16](https://github.com/HsiangNianian/soon/issues/16)).
+- Added opt-in local and OpenAI-compatible candidate sources for bounded
+  rerank, Repair, and explicit Generate modes. Provider context is minimal and
+  filtered, model output is treated as untrusted, deadlines fall back to the
+  deterministic policy, and Zsh/replay retain source and outcome attribution
+  ([#17](https://github.com/HsiangNianian/soon/issues/17)).
 
 ## 0.4.2 - 2026-07-29
 

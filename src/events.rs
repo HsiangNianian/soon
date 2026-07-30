@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use crate::config::AppConfig;
+use crate::model_prediction;
 use crate::prediction::{self, Memory};
 use crate::privacy;
 
@@ -65,6 +66,15 @@ impl ModelOutcome {
             "invalid-output" => Ok(Self::InvalidOutput),
             "deterministic-fallback" => Ok(Self::DeterministicFallback),
             _ => Err(format!("Unknown model outcome: {value}")),
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Timeout => "timeout",
+            Self::InvalidOutput => "invalid-output",
+            Self::DeterministicFallback => "deterministic-fallback",
         }
     }
 }
@@ -327,10 +337,54 @@ pub fn predict_after(
         previous_event_id: None,
     };
     let current = stored_current.unwrap_or(&synthetic_current);
-    prediction::predict(
+    let deterministic = prediction::predict(
         prediction::configured_policy(config),
         current,
         &memory,
+        config,
+    );
+    model_prediction::augment_if_configured(current, &memory, deterministic, config)
+}
+
+pub fn predict_explicit_model(config: &AppConfig) -> Option<prediction::Prediction> {
+    let events = load_stored_events(&event_store_path());
+    let memory = Memory::from_stored(&events);
+    let synthetic = CommandEvent {
+        schema_version: SCHEMA_VERSION,
+        id: String::new(),
+        command: String::new(),
+        cwd: std::env::current_dir()
+            .ok()
+            .map(|path| path.to_string_lossy().into_owned()),
+        repository: None,
+        branch: None,
+        started_at_ms: None,
+        duration_ms: None,
+        exit_code: None,
+        shell: String::new(),
+        previous_event_id: None,
+    };
+    let current = memory
+        .commands
+        .iter()
+        .rev()
+        .copied()
+        .find(|event| {
+            !event.command.chars().any(char::is_control)
+                && privacy::rejection_reason(&event.command, config).is_none()
+        })
+        .unwrap_or(&synthetic);
+    let deterministic = prediction::predict(
+        prediction::configured_policy(config),
+        current,
+        &memory,
+        config,
+    );
+    model_prediction::augment(
+        current,
+        &memory,
+        deterministic,
+        model_prediction::Mode::Generate,
         config,
     )
 }

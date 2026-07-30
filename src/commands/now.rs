@@ -36,9 +36,15 @@ pub fn run(
                     eprintln!("  Candidate source: {}", suggestion.candidate_source);
                     eprintln!("  Signal groups: {}", suggestion.signal_groups.join(", "));
                 }
+                let source = if suggestion.model_outcome.is_some() {
+                    suggestion.candidate_source
+                } else {
+                    suggestion.policy.event_source()
+                };
                 print_raw_suggestion(
                     Some(suggestion.command),
-                    suggestion.policy.event_source(),
+                    source,
+                    suggestion.model_outcome,
                     context.include_source,
                 );
                 return;
@@ -65,7 +71,12 @@ pub fn run(
         predict::predict_next_command(&history, ngram, &cache_cmds, config, debug && !raw);
 
     if raw {
-        print_raw_suggestion(suggestion, "deterministic-history", context.include_source);
+        print_raw_suggestion(
+            suggestion,
+            "deterministic-history",
+            None,
+            context.include_source,
+        );
         return;
     }
 
@@ -126,10 +137,19 @@ pub fn run(
     }
 }
 
-fn print_raw_suggestion(suggestion: Option<String>, source: &str, include_source: bool) {
+fn print_raw_suggestion(
+    suggestion: Option<String>,
+    source: &str,
+    model_outcome: Option<crate::events::ModelOutcome>,
+    include_source: bool,
+) {
     if let Some(cmd) = suggestion.filter(|cmd| !cmd.chars().any(char::is_control)) {
         if include_source {
-            println!("{source}\t{cmd}");
+            if let Some(outcome) = model_outcome {
+                println!("{source}\t{}\t{cmd}", outcome.label());
+            } else {
+                println!("{source}\t{cmd}");
+            }
         } else {
             println!("{cmd}");
         }

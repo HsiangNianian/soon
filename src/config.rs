@@ -58,6 +58,10 @@ pub struct EventsConfig {
 pub struct PredictionConfig {
     #[serde(default = "default_prediction_policy")]
     pub policy: String,
+    #[serde(default = "default_model_mode")]
+    pub model_mode: String,
+    #[serde(default = "default_model_timeout_ms")]
+    pub model_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -86,6 +90,14 @@ fn default_event_retention() -> usize {
 
 fn default_prediction_policy() -> String {
     "contextual".to_string()
+}
+
+fn default_model_mode() -> String {
+    "off".to_string()
+}
+
+fn default_model_timeout_ms() -> u64 {
+    1_500
 }
 
 fn default_api_key_env() -> String {
@@ -133,6 +145,8 @@ impl Default for PredictionConfig {
     fn default() -> Self {
         Self {
             policy: default_prediction_policy(),
+            model_mode: default_model_mode(),
+            model_timeout_ms: default_model_timeout_ms(),
         }
     }
 }
@@ -195,6 +209,8 @@ impl AppConfig {
             "llm.prompt" => Some(self.llm.prompt.clone()),
             "events.retention" => Some(self.events.retention.to_string()),
             "prediction.policy" => Some(self.prediction.policy.clone()),
+            "prediction.model_mode" => Some(self.prediction.model_mode.clone()),
+            "prediction.model_timeout_ms" => Some(self.prediction.model_timeout_ms.to_string()),
             "privacy.excluded_literals" => Some(format!(
                 "[{}]",
                 vec!["<redacted>"; self.privacy.excluded_literals.len()].join(", ")
@@ -265,6 +281,23 @@ impl AppConfig {
                 }
                 self.prediction.policy = value.to_string();
             }
+            "prediction.model_mode" => {
+                if !matches!(value, "off" | "rerank" | "repair" | "rerank-repair") {
+                    return Err(
+                        "Invalid model mode. Valid: off, rerank, repair, rerank-repair".to_string(),
+                    );
+                }
+                self.prediction.model_mode = value.to_string();
+            }
+            "prediction.model_timeout_ms" => {
+                let timeout = value
+                    .parse::<u64>()
+                    .map_err(|_| format!("Invalid model timeout: {value}"))?;
+                if !(10..=30_000).contains(&timeout) {
+                    return Err("Model timeout must be between 10 and 30000 ms".to_string());
+                }
+                self.prediction.model_timeout_ms = timeout;
+            }
             "privacy.excluded_literals" => {
                 self.privacy.excluded_literals = parse_list(value);
             }
@@ -323,5 +356,21 @@ mod tests {
     #[test]
     fn contextual_policy_is_the_default_after_passing_the_promotion_gate() {
         assert_eq!(AppConfig::default().prediction.policy, "contextual");
+        assert_eq!(AppConfig::default().prediction.model_mode, "off");
+    }
+
+    #[test]
+    fn model_prediction_config_validates_mode_and_deadline() {
+        let mut config = AppConfig::default();
+        assert!(config.set_value("prediction.model_mode", "repair").is_ok());
+        assert!(config
+            .set_value("prediction.model_mode", "always-online")
+            .is_err());
+        assert!(config
+            .set_value("prediction.model_timeout_ms", "40")
+            .is_ok());
+        assert!(config
+            .set_value("prediction.model_timeout_ms", "0")
+            .is_err());
     }
 }

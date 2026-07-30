@@ -18,6 +18,8 @@ Candidate retrieval and ranking are separate interfaces in `src/prediction.rs`:
 
 The v0.4 baseline retrieves matching first-order transitions and applies its deterministic frequency, result, directory, and recency ordering. The contextual policy retrieves complete commands from event history. When any first-order transition is available, unrelated candidates are removed before ranking; otherwise the full safe history provides a cold-start fallback.
 
+Opt-in model candidates enter this same contextual ranker through the external candidate-source boundary. Their provider contract, model-order feature, deadline, filtering, and deterministic fallback are documented in [Optional model candidate sources](model-sources.md).
+
 ## Evidence
 
 The contextual ranker combines these local signals:

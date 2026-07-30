@@ -24,12 +24,14 @@ if [[ -o interactive ]]; then
   typeset -g _soon_suggestion_event_id=''
   typeset -g _soon_suggestion_latency=''
   typeset -g _soon_suggestion_source=''
+  typeset -g _soon_suggestion_model_outcome=''
   typeset -g _soon_accepted_command=''
   typeset -g _soon_accepted_id=''
   typeset -g _soon_accepted_trigger=''
   typeset -g _soon_accepted_event_id=''
   typeset -g _soon_accepted_latency=''
   typeset -g _soon_accepted_source=''
+  typeset -g _soon_accepted_model_outcome=''
   typeset -g _soon_previous_ctrl_f=${${(z)$(bindkey '^F' 2>/dev/null)}[-1]}
   [[ -n $_soon_previous_ctrl_f ]] || _soon_previous_ctrl_f='.forward-char'
 
@@ -82,9 +84,17 @@ if [[ -o interactive ]]; then
       payload=${line#*$'\t'}
       if [[ $payload == *$'\t'* ]]; then
         _soon_suggestion_source=${payload%%$'\t'*}
-        _soon_suggestion=${payload#*$'\t'}
+        payload=${payload#*$'\t'}
+        if [[ $payload == *$'\t'* ]]; then
+          _soon_suggestion_model_outcome=${payload%%$'\t'*}
+          _soon_suggestion=${payload#*$'\t'}
+        else
+          _soon_suggestion_model_outcome=''
+          _soon_suggestion=$payload
+        fi
       else
         _soon_suggestion_source='deterministic-history'
+        _soon_suggestion_model_outcome=''
         _soon_suggestion=$payload
       fi
       _soon_suggestion_id="${EPOCHREALTIME//./}-$$-$RANDOM"
@@ -96,6 +106,7 @@ if [[ -o interactive ]]; then
       _soon_suggestion=''
       _soon_suggestion_id=''
       _soon_suggestion_source=''
+      _soon_suggestion_model_outcome=''
     fi
     zle -F $fd 2>/dev/null || true
     (( fd == _soon_fd )) && _soon_fd=-1
@@ -107,7 +118,7 @@ if [[ -o interactive ]]; then
     local outcome=$1
     [[ -n $_soon_suggestion_id && -n $_soon_suggestion ]] || return 0
 
-    _soon_emit_suggestion "$outcome" "$_soon_suggestion_id" "$_soon_suggestion_trigger" "$_soon_suggestion_event_id" "$_soon_suggestion_latency" "$_soon_suggestion_source" "$_soon_suggestion"
+    _soon_emit_suggestion "$outcome" "$_soon_suggestion_id" "$_soon_suggestion_trigger" "$_soon_suggestion_event_id" "$_soon_suggestion_latency" "$_soon_suggestion_source" "$_soon_suggestion" "$_soon_suggestion_model_outcome"
   }
 
   function _soon_emit_suggestion() {
@@ -118,6 +129,7 @@ if [[ -o interactive ]]; then
     local latency=$5
     local candidate_source=$6
     local command_text=$7
+    local model_outcome=$8
 
     local -a event_args=(
       events record-suggestion
@@ -129,6 +141,7 @@ if [[ -o interactive ]]; then
       --latency-ms "$latency"
     )
     [[ -n $command_event_id ]] && event_args+=(--command-event-id "$command_event_id")
+    [[ -n $model_outcome ]] && event_args+=(--model-outcome "$model_outcome")
     command soon "${event_args[@]}" >/dev/null 2>&1 &!
   }
 
@@ -144,6 +157,7 @@ if [[ -o interactive ]]; then
     _soon_cancel_prediction
     _soon_suggestion=''
     _soon_suggestion_source=''
+    _soon_suggestion_model_outcome=''
 
     if [[ -n $after ]]; then
       if (( exit_status == 0 )); then
@@ -200,7 +214,7 @@ if [[ -o interactive ]]; then
       _soon_record_suggestion dismissed
     fi
     if [[ -n $_soon_accepted_command && $1 == $_soon_accepted_command ]]; then
-      _soon_emit_suggestion executed "$_soon_accepted_id" "$_soon_accepted_trigger" "$_soon_accepted_event_id" "$_soon_accepted_latency" "$_soon_accepted_source" "$_soon_accepted_command"
+      _soon_emit_suggestion executed "$_soon_accepted_id" "$_soon_accepted_trigger" "$_soon_accepted_event_id" "$_soon_accepted_latency" "$_soon_accepted_source" "$_soon_accepted_command" "$_soon_accepted_model_outcome"
     fi
     _soon_accepted_command=''
     _soon_accepted_id=''
@@ -208,6 +222,7 @@ if [[ -o interactive ]]; then
     _soon_accepted_event_id=''
     _soon_accepted_latency=''
     _soon_accepted_source=''
+    _soon_accepted_model_outcome=''
     _soon_cancel_prediction
     _soon_suggestion=''
     _soon_suggestion_id=''
@@ -215,6 +230,7 @@ if [[ -o interactive ]]; then
     _soon_suggestion_event_id=''
     _soon_suggestion_latency=''
     _soon_suggestion_source=''
+    _soon_suggestion_model_outcome=''
     _soon_refresh_display
     local -a command_words=(${(z)1})
     if [[ ${command_words[1]:-} == soon ]] ||
@@ -261,10 +277,12 @@ if [[ -o interactive ]]; then
       _soon_accepted_event_id=$_soon_suggestion_event_id
       _soon_accepted_latency=$_soon_suggestion_latency
       _soon_accepted_source=$_soon_suggestion_source
+      _soon_accepted_model_outcome=$_soon_suggestion_model_outcome
       BUFFER=$_soon_suggestion
       CURSOR=${#BUFFER}
       _soon_suggestion=''
       _soon_suggestion_source=''
+      _soon_suggestion_model_outcome=''
       _soon_refresh_display
     else
       zle "$_soon_previous_ctrl_f"
@@ -282,6 +300,7 @@ if [[ -o interactive ]]; then
     zle -D _soon_apply_suggestion 2>/dev/null || true
     _soon_suggestion=''
     _soon_suggestion_source=''
+    _soon_suggestion_model_outcome=''
     _soon_highlight=''
   }
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
 use crate::config::AppConfig;
-use crate::events::{CommandEvent, StoredEvent, SuggestionEvent, SuggestionOutcome};
+use crate::events::{CommandEvent, ModelOutcome, StoredEvent, SuggestionEvent, SuggestionOutcome};
 use crate::predict::{is_ignored_command, main_cmd};
 use crate::privacy;
 
@@ -35,6 +35,15 @@ pub struct Prediction {
     pub policy: PolicyKind,
     pub candidate_source: &'static str,
     pub signal_groups: Vec<&'static str>,
+    pub model_outcome: Option<ModelOutcome>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExternalCandidate {
+    pub command: String,
+    pub source: &'static str,
+    pub rank: usize,
+    pub candidate_count: usize,
 }
 
 #[derive(Default)]
@@ -61,9 +70,10 @@ impl<'a> Memory<'a> {
 }
 
 struct Candidate<'a> {
-    command: &'a str,
+    command: String,
     source: &'static str,
     observations: Vec<Observation<'a>>,
+    model_rank: Option<(usize, usize)>,
 }
 
 struct Observation<'a> {
@@ -136,9 +146,10 @@ impl CandidateSource for TransitionHistorySource {
             candidates
                 .entry(next.command.trim())
                 .or_insert_with(|| Candidate {
-                    command: next.command.trim(),
+                    command: next.command.trim().to_string(),
                     source: self.label(),
                     observations: Vec::new(),
+                    model_rank: None,
                 })
                 .observations
                 .push(Observation {
@@ -201,13 +212,14 @@ impl Ranker for V04Ranker {
                 .then_with(|| score_b.directory_matches.cmp(&score_a.directory_matches))
                 .then_with(|| score_b.evidence.cmp(&score_a.evidence))
                 .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
-                .then_with(|| candidate_a.command.cmp(candidate_b.command))
+                .then_with(|| candidate_a.command.cmp(&candidate_b.command))
         });
         ranked.into_iter().next().map(|(candidate, _)| Prediction {
             command: candidate.command.to_string(),
             policy: PolicyKind::V04Baseline,
             candidate_source: candidate.source,
             signal_groups: v04_signal_groups(current, &candidate),
+            model_outcome: None,
         })
     }
 }
@@ -269,9 +281,10 @@ impl CandidateSource for FullHistorySource {
             candidates
                 .entry(event.command.trim())
                 .or_insert_with(|| Candidate {
-                    command: event.command.trim(),
+                    command: event.command.trim().to_string(),
                     source: self.label(),
                     observations: Vec::new(),
+                    model_rank: None,
                 })
                 .observations
                 .push(Observation {
@@ -307,6 +320,7 @@ struct ContextualScore {
     first_order_matches: usize,
     first_order_known: usize,
     feedback: usize,
+    model_support: bool,
     evidence: usize,
     latest_index: usize,
 }
@@ -339,11 +353,12 @@ impl Ranker for ContextualRanker {
         });
         if has_first_order_evidence {
             candidates.retain(|candidate| {
-                candidate.observations.iter().any(|observation| {
-                    observation
-                        .previous
-                        .is_some_and(|event| event.command.trim() == current.command.trim())
-                })
+                candidate.model_rank.is_some()
+                    || candidate.observations.iter().any(|observation| {
+                        observation
+                            .previous
+                            .is_some_and(|event| event.command.trim() == current.command.trim())
+                    })
             });
         } else {
             candidates.retain(|candidate| candidate.command != current.command.trim());
@@ -467,14 +482,19 @@ impl Ranker for ContextualRanker {
                 let feedback = memory
                     .suggestions
                     .iter()
-                    .filter(|event| event.command.trim() == candidate.command)
+                    .filter(|event| event.command.trim() == candidate.command.as_str())
                     .map(|event| match event.outcome {
                         SuggestionOutcome::Accepted => 2,
                         SuggestionOutcome::Executed => 4,
                         SuggestionOutcome::Shown | SuggestionOutcome::Dismissed => 0,
                     })
                     .sum();
-                let mut score = ContextualScore { feedback, ..score };
+                let model_support = candidate.model_rank.is_some();
+                let mut score = ContextualScore {
+                    feedback,
+                    model_support,
+                    ..score
+                };
                 score.total = smoothed_prior(score.evidence, total_evidence, candidate_count)
                     + 2.0 * smoothed_match(score.first_order_matches, score.first_order_known, 2)
                     + 2.5 * smoothed_match(score.second_order_matches, score.second_order_known, 2)
@@ -486,6 +506,13 @@ impl Ranker for ContextualRanker {
                     + 1.5 * smoothed_match(score.result_matches, score.result_known, 2)
                     + 0.75 * smoothed_match(score.duration_matches, score.duration_known, 4)
                     + 1.5 * (score.feedback as f64).ln_1p()
+                    + candidate
+                        .model_rank
+                        .map(|(rank, total)| {
+                            let preference = total.saturating_sub(rank).max(1) as f64;
+                            8.0 * preference.ln_1p()
+                        })
+                        .unwrap_or(0.0)
                     + 0.25 * score.latest_index as f64 / max_index as f64;
                 (candidate, score)
             })
@@ -496,7 +523,7 @@ impl Ranker for ContextualRanker {
                 .total_cmp(&score_a.total)
                 .then_with(|| score_b.evidence.cmp(&score_a.evidence))
                 .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
-                .then_with(|| candidate_a.command.cmp(candidate_b.command))
+                .then_with(|| candidate_a.command.cmp(&candidate_b.command))
         });
         ranked
             .into_iter()
@@ -506,6 +533,7 @@ impl Ranker for ContextualRanker {
                 policy: PolicyKind::Contextual,
                 candidate_source: candidate.source,
                 signal_groups: contextual_signal_groups(current, &candidate, &score),
+                model_outcome: None,
             })
     }
 }
@@ -572,6 +600,9 @@ fn contextual_signal_groups(
     if score.feedback > 0 {
         groups.push("feedback");
     }
+    if score.model_support {
+        groups.push("model");
+    }
     groups.extend(["frequency", "recency"]);
     groups
 }
@@ -627,6 +658,85 @@ pub fn predict(
             ContextualRanker.rank(current, candidates, memory)
         }
     }
+}
+
+pub fn predict_with_external(
+    current: &CommandEvent,
+    memory: &Memory<'_>,
+    external: &[ExternalCandidate],
+    config: &AppConfig,
+) -> Option<Prediction> {
+    let mut candidates = FullHistorySource.retrieve(current, memory, config);
+    for model_candidate in external {
+        if privacy::model_candidate_rejection_reason(&model_candidate.command, config).is_some()
+            || is_ignored_command(main_cmd(&model_candidate.command), config)
+        {
+            continue;
+        }
+        if let Some(candidate) = candidates
+            .iter_mut()
+            .find(|candidate| candidate.command == model_candidate.command.trim())
+        {
+            candidate.source = model_candidate.source;
+            candidate.model_rank = Some((model_candidate.rank, model_candidate.candidate_count));
+        } else {
+            candidates.push(Candidate {
+                command: model_candidate.command.trim().to_string(),
+                source: model_candidate.source,
+                observations: Vec::new(),
+                model_rank: Some((model_candidate.rank, model_candidate.candidate_count)),
+            });
+        }
+    }
+    ContextualRanker.rank(current, candidates, memory)
+}
+
+pub fn local_candidate_shortlist(
+    current: &CommandEvent,
+    memory: &Memory<'_>,
+    config: &AppConfig,
+    limit: usize,
+) -> Vec<String> {
+    let mut candidates = FullHistorySource.retrieve(current, memory, config);
+    let has_transition = candidates.iter().any(|candidate| {
+        candidate.observations.iter().any(|observation| {
+            observation
+                .previous
+                .is_some_and(|event| event.command.trim() == current.command.trim())
+        })
+    });
+    if has_transition {
+        candidates.retain(|candidate| {
+            candidate.observations.iter().any(|observation| {
+                observation
+                    .previous
+                    .is_some_and(|event| event.command.trim() == current.command.trim())
+            })
+        });
+    }
+    candidates.sort_by(|a, b| {
+        b.observations
+            .len()
+            .cmp(&a.observations.len())
+            .then_with(|| {
+                b.observations
+                    .iter()
+                    .map(|observation| observation.index)
+                    .max()
+                    .cmp(
+                        &a.observations
+                            .iter()
+                            .map(|observation| observation.index)
+                            .max(),
+                    )
+            })
+            .then_with(|| a.command.cmp(&b.command))
+    });
+    candidates
+        .into_iter()
+        .map(|candidate| candidate.command)
+        .take(limit)
+        .collect()
 }
 
 pub fn configured_policy(config: &AppConfig) -> PolicyKind {
