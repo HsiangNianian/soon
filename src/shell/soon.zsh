@@ -23,11 +23,13 @@ if [[ -o interactive ]]; then
   typeset -g _soon_suggestion_trigger=''
   typeset -g _soon_suggestion_event_id=''
   typeset -g _soon_suggestion_latency=''
+  typeset -g _soon_suggestion_source=''
   typeset -g _soon_accepted_command=''
   typeset -g _soon_accepted_id=''
   typeset -g _soon_accepted_trigger=''
   typeset -g _soon_accepted_event_id=''
   typeset -g _soon_accepted_latency=''
+  typeset -g _soon_accepted_source=''
   typeset -g _soon_previous_ctrl_f=${${(z)$(bindkey '^F' 2>/dev/null)}[-1]}
   [[ -n $_soon_previous_ctrl_f ]] || _soon_previous_ctrl_f='.forward-char'
 
@@ -73,10 +75,18 @@ if [[ -o interactive ]]; then
   function _soon_prediction_ready() {
     local fd=$1
     local line=''
+    local payload=''
 
     if IFS= read -r line <&$fd && [[ $line == *$'\t'* ]]; then
       SOON_LAST_LATENCY_MS=${line%%$'\t'*}
-      _soon_suggestion=${line#*$'\t'}
+      payload=${line#*$'\t'}
+      if [[ $payload == *$'\t'* ]]; then
+        _soon_suggestion_source=${payload%%$'\t'*}
+        _soon_suggestion=${payload#*$'\t'}
+      else
+        _soon_suggestion_source='deterministic-history'
+        _soon_suggestion=$payload
+      fi
       _soon_suggestion_id="${EPOCHREALTIME//./}-$$-$RANDOM"
       _soon_suggestion_trigger=$_soon_prediction_trigger
       _soon_suggestion_event_id=$_soon_prediction_event_id
@@ -85,6 +95,7 @@ if [[ -o interactive ]]; then
     else
       _soon_suggestion=''
       _soon_suggestion_id=''
+      _soon_suggestion_source=''
     fi
     zle -F $fd 2>/dev/null || true
     (( fd == _soon_fd )) && _soon_fd=-1
@@ -96,7 +107,7 @@ if [[ -o interactive ]]; then
     local outcome=$1
     [[ -n $_soon_suggestion_id && -n $_soon_suggestion ]] || return 0
 
-    _soon_emit_suggestion "$outcome" "$_soon_suggestion_id" "$_soon_suggestion_trigger" "$_soon_suggestion_event_id" "$_soon_suggestion_latency" "$_soon_suggestion"
+    _soon_emit_suggestion "$outcome" "$_soon_suggestion_id" "$_soon_suggestion_trigger" "$_soon_suggestion_event_id" "$_soon_suggestion_latency" "$_soon_suggestion_source" "$_soon_suggestion"
   }
 
   function _soon_emit_suggestion() {
@@ -105,13 +116,14 @@ if [[ -o interactive ]]; then
     local trigger=$3
     local command_event_id=$4
     local latency=$5
-    local command_text=$6
+    local candidate_source=$6
+    local command_text=$7
 
     local -a event_args=(
       events record-suggestion
       --id "$suggestion_id"
       --trigger "$trigger"
-      --candidate-source history
+      --candidate-source "$candidate_source"
       --command "$command_text"
       --outcome "$outcome"
       --latency-ms "$latency"
@@ -131,6 +143,7 @@ if [[ -o interactive ]]; then
     local started=$EPOCHREALTIME
     _soon_cancel_prediction
     _soon_suggestion=''
+    _soon_suggestion_source=''
 
     if [[ -n $after ]]; then
       if (( exit_status == 0 )); then
@@ -153,7 +166,7 @@ if [[ -o interactive ]]; then
         )
         [[ -n $previous_event_id ]] && record_args+=(--previous-id "$previous_event_id")
         command soon "${record_args[@]}" >/dev/null 2>&1
-        suggestion=$(command soon --shell zsh --ngram 1 now --raw --after "$after" --exit-code "$exit_status" --cwd "$command_cwd" 2>/dev/null)
+        suggestion=$(command soon --shell zsh --ngram 1 now --raw --include-source --after "$after" --event-id "$event_id" --exit-code "$exit_status" --cwd "$command_cwd" 2>/dev/null)
         elapsed=$(( (EPOCHREALTIME - started) * 1000.0 ))
         printf '%.3f\t%s\n' $elapsed "$suggestion"
       )
@@ -162,7 +175,7 @@ if [[ -o interactive ]]; then
       _soon_prediction_event_id=''
       exec {_soon_fd}< <(
         local suggestion elapsed
-        suggestion=$(command soon --shell zsh now --raw 2>/dev/null)
+        suggestion=$(command soon --shell zsh now --raw --include-source 2>/dev/null)
         elapsed=$(( (EPOCHREALTIME - started) * 1000.0 ))
         printf '%.3f\t%s\n' $elapsed "$suggestion"
       )
@@ -187,19 +200,21 @@ if [[ -o interactive ]]; then
       _soon_record_suggestion dismissed
     fi
     if [[ -n $_soon_accepted_command && $1 == $_soon_accepted_command ]]; then
-      _soon_emit_suggestion executed "$_soon_accepted_id" "$_soon_accepted_trigger" "$_soon_accepted_event_id" "$_soon_accepted_latency" "$_soon_accepted_command"
+      _soon_emit_suggestion executed "$_soon_accepted_id" "$_soon_accepted_trigger" "$_soon_accepted_event_id" "$_soon_accepted_latency" "$_soon_accepted_source" "$_soon_accepted_command"
     fi
     _soon_accepted_command=''
     _soon_accepted_id=''
     _soon_accepted_trigger=''
     _soon_accepted_event_id=''
     _soon_accepted_latency=''
+    _soon_accepted_source=''
     _soon_cancel_prediction
     _soon_suggestion=''
     _soon_suggestion_id=''
     _soon_suggestion_trigger=''
     _soon_suggestion_event_id=''
     _soon_suggestion_latency=''
+    _soon_suggestion_source=''
     _soon_refresh_display
     local -a command_words=(${(z)1})
     if [[ ${command_words[1]:-} == soon ]] ||
@@ -245,9 +260,11 @@ if [[ -o interactive ]]; then
       _soon_accepted_trigger=$_soon_suggestion_trigger
       _soon_accepted_event_id=$_soon_suggestion_event_id
       _soon_accepted_latency=$_soon_suggestion_latency
+      _soon_accepted_source=$_soon_suggestion_source
       BUFFER=$_soon_suggestion
       CURSOR=${#BUFFER}
       _soon_suggestion=''
+      _soon_suggestion_source=''
       _soon_refresh_display
     else
       zle "$_soon_previous_ctrl_f"
@@ -264,6 +281,7 @@ if [[ -o interactive ]]; then
     zle -D _soon_accept 2>/dev/null || true
     zle -D _soon_apply_suggestion 2>/dev/null || true
     _soon_suggestion=''
+    _soon_suggestion_source=''
     _soon_highlight=''
   }
 

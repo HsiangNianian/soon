@@ -40,7 +40,7 @@ At an empty prompt, soon computes in the background and renders one dim full-com
 
 The default prediction path uses local history, not a model or network service. It can choose a Next-step suggestion after success, a Repair suggestion after failure, or predict on demand when you run `soon`.
 
-> **Help validate the beta:** join the [ten-user Zsh pilot](https://github.com/HsiangNianian/soon/issues/27). The study asks for privacy-safe aggregate counters and qualitative feedback, never raw command text.
+> **v0.5 development:** the source tree defaults to the local contextual policy after it passed the replay promotion gate. The published v0.4.2 package still uses the deterministic baseline.
 
 ## The idea
 
@@ -105,6 +105,9 @@ soon stats
 # Measure the current policy against past local transitions
 soon replay
 
+# Compare both policies, or switch back to the v0.4 fallback
+soon config set prediction.policy v0.4-baseline
+
 # Export aggregate adoption metrics that are safe to share
 soon report
 soon report --json
@@ -129,21 +132,19 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
 
-## How the current predictor works
+## How the current predictors work
 
-1. Detect the active shell and read its history file.
-2. Reduce recent commands to executable names only for matching workflow context.
-3. Keep each candidate as the complete historical command, including arguments.
-4. Accumulate repeated transition evidence and weight newer evidence more heavily.
-5. Print the highest-ranked full command without presenting the heuristic as calibrated confidence.
+The v0.4 baseline matches recurring transitions, preserves complete historical commands including arguments, and deterministically ranks result, directory, frequency, and recency evidence.
 
-This baseline is deliberately simple. A more complex ranker must beat it under `soon replay` before it replaces the deterministic hot path.
+The contextual policy separates candidate retrieval from ranking, then combines first- and second-order transitions, cwd, optional repository and branch, original time, result, duration, frequency, recency, and accepted/executed feedback. Missing metadata contributes no evidence. Its additive smoothing, weights, debug contract, and deterministic tie-breaking are documented in [Contextual prediction policy](docs/contextual-policy.md).
+
+The v0.5 source promotes contextual after it improved exact top-1 without reducing coverage or exceeding the 20 ms p95 budget in both the deterministic fixture and a local aggregate replay. `v0.4-baseline` remains an explicit offline fallback.
 
 ## Agent roadmap
 
 The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) combines safe command lifecycle events, explicit `soon`, Next-step after success, Repair after failure, a private history-import path, and measured local replay.
 
-The [v0.4.1 Adoption Sprint](https://github.com/HsiangNianian/soon/milestone/3) makes that loop easy to discover, validates it with ten Zsh users, and adds a privacy-safe report before the prediction policy becomes more complex.
+The closed [v0.4.1 Adoption Sprint](https://github.com/HsiangNianian/soon/milestone/3) added the public demo, launch assets, and privacy-safe report. The planned ten-user pilot and final timed launch measurements were explicitly closed as not planned rather than reported as completed.
 
 The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) then measures a contextual probabilistic ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) before adding opt-in local-model and OpenAI-compatible candidate sources in [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
@@ -176,7 +177,7 @@ export SOON_LLM_API_KEY
 
 Ollama can run without a credential. The legacy `llm.api_key` setting is rejected.
 
-The Zsh lifecycle integration stores local command and suggestion events in a retained JSONL log under the operating system's application-data directory. Inspect its exact path, schema version, retention, and aggregate counts without printing command text:
+The Zsh lifecycle integration stores local command and suggestion events in a retained JSONL log under the operating system's application-data directory. When cwd is inside a Git worktree, the background recorder also reads the repository root and symbolic branch directly from `.git/HEAD`; it does not spawn `git`. Inspect the store's exact path, schema version, retention, and aggregate counts without printing command text:
 
 ```bash
 soon events inspect
@@ -207,7 +208,7 @@ soon events import-zsh \
 
 Plain command-per-line history and Zsh extended history (`: <epoch>:<duration>;<command>`) are supported. Extended timestamps and durations are preserved; unavailable cwd, exit status, and plain-history timestamps remain unknown. Preview and import summaries report importable, sensitive, malformed, duplicate, and already-imported counts without printing command text. Stable event IDs make repeated imports idempotent, including identical rotated files.
 
-Measure the deterministic policy against that local event memory:
+Compare the v0.4 baseline and contextual policy against that local event memory:
 
 ```bash
 soon replay
@@ -215,9 +216,9 @@ soon replay
 
 Replay follows JSONL append order rather than event timestamps. For each linked command transition it predicts first, scores the result, and only then exposes that transition to later samples, so future observations cannot leak into training. Unknown exit status is classified as `manual`; exit status zero is `next-step`; any other status is `repair`.
 
-`Samples` counts eligible linked transitions. Coverage is predictions divided by samples, and top-1 match is exact command matches divided by all samples. Overall and per-trigger rows include p50/p95 prediction latency. Candidate-source rows compare deterministic history with contextual policy, local model, or remote-provider suggestions when those sources have recorded a `shown` event before the actual next command. Model attempts aligned to a later command also report timeout, invalid-output, and deterministic-fallback rates.
+`Samples` counts eligible linked transitions. Coverage is predictions divided by samples, and top-1 match is exact command matches divided by all samples. Overall and per-trigger rows preserve the v0.4 baseline metrics. The policy comparison runs both baseline and contextual prediction through the same production module and reports coverage, top-1, p50, and p95 for each. Candidate-source rows retain the computed deterministic-history baseline and separately score other suggestions that were actually recorded before the next command. Model attempts aligned to a later command also report timeout, invalid-output, and deterministic-fallback rates.
 
-The report is aggregate-only: it prints no command text and performs no upload. The deterministic CI fixture has a Zsh hot-path p95 budget of **20 ms**; `soon replay` prints `PASS` or `FAIL` against that budget on the current local event set.
+The report is aggregate-only: it prints no command text and performs no upload. The deterministic CI fixture has a Zsh hot-path p95 budget of **20 ms**. Replay also prints a contextual promotion gate that requires strictly better top-1, no coverage regression, and contextual p95 at or below that budget.
 
 Export the smaller adoption report when sharing beta feedback:
 
@@ -255,6 +256,8 @@ soon config init
 soon config path
 soon config get general.ngram
 soon config set general.ngram 5
+soon config get prediction.policy
+soon config set prediction.policy v0.4-baseline  # explicit fallback
 soon config set update.channel cargo  # or pip
 ```
 
@@ -276,7 +279,7 @@ soon update             Check the configured release channel
 
 ## Contributing
 
-Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an unblocked issue from the [v0.4.1 Adoption Sprint](https://github.com/HsiangNianian/soon/milestone/3). The contextual ranker and optional model sources remain sequenced behind real-user validation.
+Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an open issue from the [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2). The contextual ranker is tracked in [#16](https://github.com/HsiangNianian/soon/issues/16); optional model-backed sources remain sequenced in [#17](https://github.com/HsiangNianian/soon/issues/17).
 
 For local verification:
 

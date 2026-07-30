@@ -6,6 +6,7 @@ mod events;
 mod history_import;
 mod learn;
 mod predict;
+mod prediction;
 mod privacy;
 mod replay;
 mod report;
@@ -53,8 +54,10 @@ fn main() {
         }
         Some(Commands::Now {
             raw,
+            include_source,
             after,
             exit_code,
+            event_id,
             cwd,
         }) => {
             require_known_shell(&shell);
@@ -67,7 +70,9 @@ fn main() {
                 commands::now::InvocationContext {
                     after: after.as_deref(),
                     exit_code,
+                    event_id: event_id.as_deref(),
                     cwd: cwd.as_deref(),
+                    include_source,
                 },
             );
         }

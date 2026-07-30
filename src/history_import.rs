@@ -91,6 +91,8 @@ fn prepare_zsh(
                         id: id.clone(),
                         command: entry.command.to_string(),
                         cwd: None,
+                        repository: None,
+                        branch: None,
                         started_at_ms: entry.started_at_ms,
                         duration_ms: entry.duration_ms,
                         exit_code: None,

@@ -20,20 +20,25 @@ pub fn run(action: EventsAction, config: &AppConfig) {
             exit_code,
             shell,
             previous_id,
-        } => record_command(
-            CommandEvent {
-                schema_version: SCHEMA_VERSION,
-                id,
-                command,
-                cwd: Some(cwd),
-                started_at_ms: Some(started_at_ms),
-                duration_ms: Some(duration_ms),
-                exit_code: Some(exit_code),
-                shell,
-                previous_event_id: previous_id,
-            },
-            config,
-        ),
+        } => {
+            let (repository, branch) = events::discover_git_context(&cwd);
+            record_command(
+                CommandEvent {
+                    schema_version: SCHEMA_VERSION,
+                    id,
+                    command,
+                    cwd: Some(cwd),
+                    repository,
+                    branch,
+                    started_at_ms: Some(started_at_ms),
+                    duration_ms: Some(duration_ms),
+                    exit_code: Some(exit_code),
+                    shell,
+                    previous_event_id: previous_id,
+                },
+                config,
+            );
+        }
         EventsAction::RecordSuggestion {
             id,
             command_event_id,

@@ -6,6 +6,7 @@ use crate::events::{
     self, CommandEvent, ModelOutcome, StoredEvent, SuggestionEvent, SuggestionOutcome,
 };
 use crate::predict::{is_ignored_command, main_cmd};
+use crate::prediction::{self, Memory, PolicyKind};
 use crate::privacy;
 
 pub const ZSH_P95_BUDGET_MS: f64 = 20.0;
@@ -105,6 +106,8 @@ impl ModelMetrics {
 #[derive(Debug, Default)]
 pub struct ReplayReport {
     pub overall: Metrics,
+    pub baseline: Metrics,
+    pub contextual: Metrics,
     by_trigger: HashMap<Trigger, Metrics>,
     by_source: HashMap<String, Metrics>,
     pub model: ModelMetrics,
@@ -124,21 +127,12 @@ impl ReplayReport {
         sources.sort_by_key(|(source, _)| *source);
         sources
     }
-}
 
-#[derive(Debug)]
-struct Transition<'a> {
-    previous: &'a CommandEvent,
-    next: &'a CommandEvent,
-    index: usize,
-}
-
-#[derive(Debug, Default)]
-struct CandidateScore {
-    result_matches: usize,
-    evidence: usize,
-    directory_matches: usize,
-    latest_index: usize,
+    pub fn contextual_promotion_passes(&self) -> bool {
+        self.contextual.top1_matches > self.baseline.top1_matches
+            && self.contextual.covered >= self.baseline.covered
+            && self.contextual.p95_ms() <= ZSH_P95_BUDGET_MS
+    }
 }
 
 #[derive(Debug)]
@@ -150,7 +144,8 @@ struct RecordedSuggestion<'a> {
 pub fn run(config: &AppConfig) -> ReplayReport {
     let stored_events = events::replay_events();
     let mut seen = HashMap::<&str, &CommandEvent>::new();
-    let mut transitions = Vec::<Transition<'_>>::new();
+    let mut commands = Vec::<&CommandEvent>::new();
+    let mut suggestions = Vec::<&SuggestionEvent>::new();
     let mut pending = HashMap::<&str, Vec<RecordedSuggestion<'_>>>::new();
     let mut pending_manual = Vec::<RecordedSuggestion<'_>>::new();
     let mut report = ReplayReport::default();
@@ -167,26 +162,67 @@ pub fn run(config: &AppConfig) -> ReplayReport {
                 if let Some(previous_id) = command.previous_event_id.as_deref() {
                     if let Some(previous) = seen.get(previous_id).copied() {
                         if is_candidate(&command.command, config) {
+                            let memory = Memory {
+                                commands: &commands,
+                                suggestions: &suggestions,
+                            };
                             let started = Instant::now();
-                            let prediction = predict(previous, &transitions, config);
-                            let latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
+                            let baseline = prediction::predict(
+                                PolicyKind::V04Baseline,
+                                previous,
+                                &memory,
+                                config,
+                            );
+                            let baseline_latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
+                            let started = Instant::now();
+                            let contextual = prediction::predict(
+                                PolicyKind::Contextual,
+                                previous,
+                                &memory,
+                                config,
+                            );
+                            let contextual_latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
                             let trigger = Trigger::from_exit_code(previous.exit_code);
 
                             report.overall.record(
-                                prediction.as_deref(),
+                                baseline
+                                    .as_ref()
+                                    .map(|prediction| prediction.command.as_str()),
                                 command.command.trim(),
-                                latency_ms,
+                                baseline_latency_ms,
+                            );
+                            report.baseline.record(
+                                baseline
+                                    .as_ref()
+                                    .map(|prediction| prediction.command.as_str()),
+                                command.command.trim(),
+                                baseline_latency_ms,
+                            );
+                            report.contextual.record(
+                                contextual
+                                    .as_ref()
+                                    .map(|prediction| prediction.command.as_str()),
+                                command.command.trim(),
+                                contextual_latency_ms,
                             );
                             report.by_trigger.entry(trigger).or_default().record(
-                                prediction.as_deref(),
+                                baseline
+                                    .as_ref()
+                                    .map(|prediction| prediction.command.as_str()),
                                 command.command.trim(),
-                                latency_ms,
+                                baseline_latency_ms,
                             );
                             report
                                 .by_source
                                 .entry("deterministic-history".to_string())
                                 .or_default()
-                                .record(prediction.as_deref(), command.command.trim(), latency_ms);
+                                .record(
+                                    baseline
+                                        .as_ref()
+                                        .map(|prediction| prediction.command.as_str()),
+                                    command.command.trim(),
+                                    baseline_latency_ms,
+                                );
                         }
 
                         if let Some(suggestions) = pending.remove(previous.id.as_str()) {
@@ -194,28 +230,24 @@ pub fn run(config: &AppConfig) -> ReplayReport {
                                 score_recorded(&mut report, suggestions, command);
                             }
                         }
-                        transitions.push(Transition {
-                            previous,
-                            next: command,
-                            index: transitions.len(),
-                        });
                     }
                 }
                 seen.insert(command.id.as_str(), command);
+                commands.push(command);
             }
-            StoredEvent::Suggestion(suggestion)
-                if suggestion.outcome == SuggestionOutcome::Shown
-                    && is_safe_suggestion(suggestion, config) =>
-            {
-                let recorded = RecordedSuggestion {
-                    source: canonical_source(&suggestion.candidate_source),
-                    event: suggestion,
-                };
-                if let Some(command_event_id) = suggestion.command_event_id.as_deref() {
-                    pending.entry(command_event_id).or_default().push(recorded);
-                } else {
-                    pending_manual.push(recorded);
+            StoredEvent::Suggestion(suggestion) if is_safe_suggestion(suggestion, config) => {
+                if suggestion.outcome == SuggestionOutcome::Shown {
+                    let recorded = RecordedSuggestion {
+                        source: canonical_source(&suggestion.candidate_source),
+                        event: suggestion,
+                    };
+                    if let Some(command_event_id) = suggestion.command_event_id.as_deref() {
+                        pending.entry(command_event_id).or_default().push(recorded);
+                    } else {
+                        pending_manual.push(recorded);
+                    }
                 }
+                suggestions.push(suggestion);
             }
             StoredEvent::Command(_) | StoredEvent::Suggestion(_) => {}
         }
@@ -274,55 +306,6 @@ fn canonical_source(source: &str) -> &'static str {
         "deterministic-fallback" => "deterministic-fallback",
         _ => "other",
     }
-}
-
-fn predict(
-    current: &CommandEvent,
-    transitions: &[Transition<'_>],
-    config: &AppConfig,
-) -> Option<String> {
-    let wanted_success = current.exit_code.map(|code| code == 0);
-    let mut candidates = HashMap::<&str, CandidateScore>::new();
-
-    for transition in transitions {
-        if transition.previous.command.trim() != current.command.trim()
-            || matches!(
-                (
-                    transition.previous.exit_code.map(|code| code == 0),
-                    wanted_success
-                ),
-                (Some(observed), Some(wanted)) if observed != wanted
-            )
-            || privacy::rejection_reason(&transition.next.command, config).is_some()
-            || is_ignored_command(main_cmd(&transition.next.command), config)
-        {
-            continue;
-        }
-
-        let score = candidates
-            .entry(transition.next.command.trim())
-            .or_default();
-        score.result_matches += usize::from(transition.previous.exit_code.is_some());
-        score.evidence += 1;
-        score.directory_matches +=
-            usize::from(current.cwd.is_some() && transition.previous.cwd == current.cwd);
-        score.latest_index = transition.index;
-    }
-
-    let mut ranked: Vec<_> = candidates.into_iter().collect();
-    ranked.sort_by(|(command_a, score_a), (command_b, score_b)| {
-        score_b
-            .result_matches
-            .cmp(&score_a.result_matches)
-            .then_with(|| score_b.directory_matches.cmp(&score_a.directory_matches))
-            .then_with(|| score_b.evidence.cmp(&score_a.evidence))
-            .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
-            .then_with(|| command_a.cmp(command_b))
-    });
-    ranked
-        .into_iter()
-        .next()
-        .map(|(command, _)| command.to_string())
 }
 
 fn percent(numerator: usize, denominator: usize) -> f64 {
