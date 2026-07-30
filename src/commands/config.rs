@@ -75,7 +75,7 @@ fn get_value(key: &str) {
             eprintln!("  general.shell, general.ngram, general.ignored_commands");
             eprintln!("  update.channel");
             eprintln!("  events.retention");
-            eprintln!("  prediction.policy");
+            eprintln!("  prediction.policy, prediction.model_mode, prediction.model_timeout_ms");
             eprintln!("  privacy.excluded_literals, privacy.excluded_patterns");
             eprintln!("  llm.provider, llm.api_url, llm.api_key_env, llm.model, llm.prompt");
             std::process::exit(1);

@@ -5,6 +5,7 @@ mod config;
 mod events;
 mod history_import;
 mod learn;
+mod model_prediction;
 mod predict;
 mod prediction;
 mod privacy;
@@ -76,6 +77,10 @@ fn main() {
                 },
             );
         }
+        Some(Commands::Generate {
+            raw,
+            include_source,
+        }) => commands::generate::run(&config, raw, include_source),
         None => {
             require_known_shell(&shell);
             commands::now::run(

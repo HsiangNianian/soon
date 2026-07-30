@@ -1,5 +1,6 @@
 pub mod config;
 pub mod events;
+pub mod generate;
 pub mod init;
 pub mod learn;
 pub mod now;

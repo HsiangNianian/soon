@@ -111,6 +111,9 @@ soon config set prediction.policy v0.4-baseline
 # Export aggregate adoption metrics that are safe to share
 soon report
 soon report --json
+
+# Explicitly ask a configured OpenAI-compatible provider; never auto-executes
+soon generate
 ```
 
 Override shell detection when needed:
@@ -138,6 +141,10 @@ The v0.4 baseline matches recurring transitions, preserves complete historical c
 
 The contextual policy separates candidate retrieval from ranking, then combines first- and second-order transitions, cwd, optional repository and branch, original time, result, duration, frequency, recency, and accepted/executed feedback. Missing metadata contributes no evidence. Its additive smoothing, weights, debug contract, and deterministic tie-breaking are documented in [Contextual prediction policy](docs/contextual-policy.md).
 
+Optional local and OpenAI-compatible sources can rerank safe history candidates, suggest a Repair after failure, or Generate only on explicit request. They have a hard deadline and silently retain the deterministic result on timeout, unavailability, or invalid output. The default is `prediction.model_mode = "off"`. The exact provider payload, output filters, ranking feature, and fallback protocol are documented in [Optional model candidate sources](docs/model-sources.md).
+
+The [small local model gate](docs/model-evaluation.md) tested Qwen2.5-Coder 0.5B Q4_K_M on an Intel Mac. It added one exact cold-start Repair across eight public fixtures at 676.2 ms p95, which was enough to validate the optional path but not enough quality evidence to enable it by default.
+
 The v0.5 source promotes contextual after it improved exact top-1 without reducing coverage or exceeding the 20 ms p95 budget in both the deterministic fixture and a local aggregate replay. `v0.4-baseline` remains an explicit offline fallback.
 
 ## Agent roadmap
@@ -146,11 +153,11 @@ The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) co
 
 The closed [v0.4.1 Adoption Sprint](https://github.com/HsiangNianian/soon/milestone/3) added the public demo, launch assets, and privacy-safe report. The planned ten-user pilot and final timed launch measurements were explicitly closed as not planned rather than reported as completed.
 
-The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) then measures a contextual probabilistic ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) before adding opt-in local-model and OpenAI-compatible candidate sources in [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
+The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) promotes the contextual probabilistic ranker from [#16](https://github.com/HsiangNianian/soon/issues/16) and adds the opt-in local-model/OpenAI-compatible layer from [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
 ## Privacy
 
-`soon`, `soon now`, `soon replay`, `soon report`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the local predictor in a background process; it does not upload history or block the prompt while waiting for a result.
+With the default `prediction.model_mode = "off"`, `soon`, `soon now`, `soon replay`, `soon report`, `soon init zsh`, and the local learning commands read files on your machine and do not require a network service. The Zsh integration invokes the predictor in a background process and does not block the prompt while waiting for a result. An opt-in model mode or explicit `soon generate` may contact only the configured provider.
 
 The current source rejects likely inline API keys, tokens, authorization headers, password flags, private-key material, and known credential prefixes before storing a command or suggestion. It applies the same filter again before ranking or rendering shell history, old event data, legacy learn data, provider context, and model output. Rejections report a category, not the command text.
 
@@ -163,19 +170,19 @@ soon config set privacy.excluded_patterns '(?i)^kubectl .*--context production'
 
 Comma-separated values configure more than one exclusion. Literal values are redacted from `soon config`, `config get`, and successful `config set` output. Invalid regular expressions are rejected before the configuration is saved.
 
-`soon learn ask` is different: it is an optional experimental path that sends only filtered recent commands and the current directory to the OpenAI-compatible or Ollama endpoint you configure. It does not send event IDs, exit codes, feedback, stdout, or stderr. Model candidates pass through the same local filter before display.
+The v0.5 model candidate path sends at most six filtered commands, the current command and result class, and at most five local candidates to an OpenAI-compatible endpoint. It omits paths, repository metadata, event IDs, timestamps, duration, feedback, stdout, and stderr. Model output is filtered again for control characters, credentials, configured exclusions, and dangerous commands before entering the contextual ranker. The older `soon learn ask` experiment remains separate and includes the filtered current directory.
 
 Provider credentials are read at request time from an environment variable and are never stored or printed by soon. The default variable is `SOON_LLM_API_KEY`; configure a different variable name with `llm.api_key_env`. For example, this Zsh flow keeps the value out of shell history:
 
 ```zsh
-soon config set llm.provider openai
-soon config set llm.api_url https://api.openai.com
+soon config set llm.provider openai-compatible
+soon config set llm.api_url https://provider.example/v1
 read -rs 'SOON_LLM_API_KEY?API key: '
 print
 export SOON_LLM_API_KEY
 ```
 
-Ollama can run without a credential. The legacy `llm.api_key` setting is rejected.
+A local OpenAI-compatible endpoint can run without a credential. The legacy `llm.api_key` setting is rejected.
 
 The Zsh lifecycle integration stores local command and suggestion events in a retained JSONL log under the operating system's application-data directory. When cwd is inside a Git worktree, the background recorder also reads the repository root and symbolic branch directly from `.git/HEAD`; it does not spawn `git`. Inspect the store's exact path, schema version, retention, and aggregate counts without printing command text:
 
@@ -258,6 +265,9 @@ soon config get general.ngram
 soon config set general.ngram 5
 soon config get prediction.policy
 soon config set prediction.policy v0.4-baseline  # explicit fallback
+soon config get prediction.model_mode            # off by default
+soon config set prediction.model_mode repair      # opt-in model path
+soon config set prediction.model_timeout_ms 1500
 soon config set update.channel cargo  # or pip
 ```
 
@@ -266,6 +276,7 @@ soon config set update.channel cargo  # or pip
 ```text
 soon                    Predict the next full command
 soon now                Run the same prediction explicitly
+soon generate           Explicitly request a model candidate
 soon init zsh           Print the opt-in Zsh integration
 soon stats              Show the most-used executables
 soon which              Show shell and history diagnostics
@@ -279,7 +290,7 @@ soon update             Check the configured release channel
 
 ## Contributing
 
-Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an open issue from the [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2). The contextual ranker is tracked in [#16](https://github.com/HsiangNianian/soon/issues/16); optional model-backed sources remain sequenced in [#17](https://github.com/HsiangNianian/soon/issues/17).
+Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an open issue from the [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2). The contextual ranker is tracked in [#16](https://github.com/HsiangNianian/soon/issues/16), and the opt-in model candidate layer is tracked in [#17](https://github.com/HsiangNianian/soon/issues/17).
 
 For local verification:
 

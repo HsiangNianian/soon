@@ -294,7 +294,7 @@ fn canonical_source(source: &str) -> &'static str {
         .replace('_', "-")
         .as_str()
     {
-        "history" | "deterministic-history" => "deterministic-history",
+        "history" | "event-history" | "deterministic-history" => "deterministic-history",
         "context" | "contextual-policy" => "contextual-policy",
         "local-model" => "local-model",
         "remote" | "remote-provider" => "remote-provider",

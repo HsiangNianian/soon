@@ -46,6 +46,15 @@ pub enum Commands {
         #[arg(long, hide = true, requires = "after")]
         cwd: Option<String>,
     },
+    /// Explicitly ask an opt-in model provider for a command candidate
+    Generate {
+        /// Print only the generated command
+        #[arg(long)]
+        raw: bool,
+        /// Prefix raw output with source and model outcome
+        #[arg(long, hide = true, requires = "raw")]
+        include_source: bool,
+    },
     /// Show most used commands
     Stats,
     /// Learn from command history and predict intelligently

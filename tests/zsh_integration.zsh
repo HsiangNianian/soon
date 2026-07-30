@@ -37,6 +37,7 @@ esac
 sleep 0.05
 prefix=''
 case " \$* " in
+  *' --exit-code 1 '*) prefix="local-model	success	" ;;
   *' --include-source '*) prefix="deterministic-history	" ;;
 esac
 case " \$* " in
@@ -167,6 +168,8 @@ wait_for_output 'SOON_PROMPT> '
 wait_for_output "touch $repair_file"
 wait_for_log '--command false'
 wait_for_log '--exit-code 1'
+wait_for_log '--candidate-source local-model'
+wait_for_log '--model-outcome success'
 
 zpty -w soon_shell 'print -r -- "SOON_STATUS:$?"'
 wait_for_output 'SOON_STATUS:1'
