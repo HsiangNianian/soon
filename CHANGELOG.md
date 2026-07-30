@@ -2,6 +2,17 @@
 
 All notable changes to soon are documented here.
 
+## Unreleased
+
+### Added
+
+- Added a contextual full-command ranker with separate candidate-source
+  and ranker boundaries, smoothed transition and context evidence, repository
+  and branch capture, feedback-aware ranking, explainable debug output, and a
+  chronological promotion comparison against the v0.4 baseline. It is the v0.5
+  source default after passing the quality and latency gate; `v0.4-baseline`
+  remains an explicit fallback ([#16](https://github.com/HsiangNianian/soon/issues/16)).
+
 ## 0.4.2 - 2026-07-29
 
 soon 0.4.2 is a focused Zsh history-correctness patch. It keeps compound

@@ -109,6 +109,41 @@ fn record_suggestion(
     );
 }
 
+fn record_suggestion_outcome(
+    home: &PathBuf,
+    id: &str,
+    command_event_id: &str,
+    text: &str,
+    outcome: &str,
+) {
+    let output = soon(home)
+        .args([
+            "events",
+            "record-suggestion",
+            "--id",
+            id,
+            "--command-event-id",
+            command_event_id,
+            "--trigger",
+            "next-step",
+            "--candidate-source",
+            "contextual-policy",
+            "--command",
+            text,
+            "--outcome",
+            outcome,
+            "--latency-ms",
+            "1.0",
+        ])
+        .output()
+        .expect("record suggestion outcome");
+    assert!(
+        output.status.success(),
+        "record suggestion outcome failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn chronological_replay_never_learns_from_the_sample_being_scored() {
     let home = isolated_home();
@@ -140,6 +175,59 @@ fn chronological_replay_never_learns_from_the_sample_being_scored() {
     assert!(stdout.contains("Zsh p95 budget: PASS"), "{stdout}");
     assert!(stdout.contains("next-step"), "{stdout}");
     assert!(stdout.contains("history"), "{stdout}");
+    for (_, text, _) in commands {
+        assert!(
+            !stdout.contains(text),
+            "replay leaked command text: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn replay_compares_the_contextual_policy_with_the_v04_baseline() {
+    let home = isolated_home();
+    let commands = [
+        ("command-1", "git status", None),
+        ("command-2", "cargo test --workspace", Some("command-1")),
+        ("command-3", "git status", Some("command-2")),
+        ("command-4", "cargo test --workspace", Some("command-3")),
+    ];
+    for (id, text, previous_id) in commands {
+        record_command(&home, id, text, "0", previous_id);
+    }
+
+    let replay = soon(&home).arg("replay").output().expect("replay events");
+    let stdout = String::from_utf8(replay.stdout).expect("UTF-8 replay output");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(replay.status.success(), "replay failed");
+    let baseline = stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("v0.4-baseline"))
+        .expect("v0.4 baseline row");
+    let contextual = stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("contextual-policy"))
+        .expect("contextual policy row");
+    assert!(baseline.contains("samples=3"), "{stdout}");
+    assert!(baseline.contains("coverage="), "{stdout}");
+    assert!(baseline.contains("top-1="), "{stdout}");
+    assert!(baseline.contains("p50="), "{stdout}");
+    assert!(baseline.contains("p95="), "{stdout}");
+    assert!(contextual.contains("samples=3"), "{stdout}");
+    assert!(contextual.contains("coverage="), "{stdout}");
+    assert!(contextual.contains("top-1="), "{stdout}");
+    assert!(contextual.contains("p50="), "{stdout}");
+    assert!(contextual.contains("p95="), "{stdout}");
+    assert!(
+        stdout.contains("Configured policy: contextual-policy"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("Contextual promotion gate:"), "{stdout}");
+    assert!(
+        stdout.contains("requires top-1 > baseline and p95 <= 20 ms"),
+        "{stdout}"
+    );
     for (_, text, _) in commands {
         assert!(
             !stdout.contains(text),
@@ -283,4 +371,44 @@ fn recorded_sources_and_model_failures_are_scored_only_after_they_occur() {
         !stdout.contains(actual),
         "replay leaked command text: {stdout}"
     );
+}
+
+#[test]
+fn contextual_replay_uses_feedback_available_before_the_actual_command() {
+    let home = isolated_home();
+    let stable = "just deploy --env stable";
+    record_command(&home, "stable-previous", "cargo test", "0", None);
+    record_command(&home, "stable-next", stable, "0", Some("stable-previous"));
+    record_command(&home, "recent-previous", "cargo test", "0", None);
+    record_command(
+        &home,
+        "recent-next",
+        "just deploy --env recent",
+        "0",
+        Some("recent-previous"),
+    );
+    record_suggestion_outcome(
+        &home,
+        "accepted-stable",
+        "recent-previous",
+        stable,
+        "accepted",
+    );
+    record_command(&home, "current", "cargo test", "0", None);
+    record_command(&home, "actual", stable, "0", Some("current"));
+
+    let replay = soon(&home).arg("replay").output().expect("replay events");
+    let stdout = String::from_utf8(replay.stdout).expect("UTF-8 replay output");
+
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(replay.status.success(), "replay failed");
+    let contextual = stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("contextual-policy"))
+        .expect("contextual policy row");
+    assert!(
+        contextual.contains("samples=3 coverage=66.7% top-1=33.3%"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains(stable), "replay leaked command text");
 }

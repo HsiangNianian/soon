@@ -30,12 +30,18 @@ pub enum Commands {
         /// Print only the predicted command
         #[arg(long)]
         raw: bool,
+        /// Prefix raw output with the selected prediction source
+        #[arg(long, hide = true, requires = "raw")]
+        include_source: bool,
         /// Include the command that just started in the prediction context
         #[arg(long, hide = true, requires = "raw")]
         after: Option<String>,
         /// Exit status of the completed command
         #[arg(long, hide = true, requires = "after", allow_hyphen_values = true)]
         exit_code: Option<i32>,
+        /// Event id of the completed command
+        #[arg(long, hide = true, requires = "after")]
+        event_id: Option<String>,
         /// Working directory of the completed command
         #[arg(long, hide = true, requires = "after")]
         cwd: Option<String>,

@@ -13,6 +13,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub events: EventsConfig,
     #[serde(default)]
+    pub prediction: PredictionConfig,
+    #[serde(default)]
     pub privacy: PrivacyConfig,
 }
 
@@ -52,6 +54,12 @@ pub struct EventsConfig {
     pub retention: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictionConfig {
+    #[serde(default = "default_prediction_policy")]
+    pub policy: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PrivacyConfig {
     #[serde(default)]
@@ -74,6 +82,10 @@ fn default_channel() -> String {
 
 fn default_event_retention() -> usize {
     10_000
+}
+
+fn default_prediction_policy() -> String {
+    "contextual".to_string()
 }
 
 fn default_api_key_env() -> String {
@@ -113,6 +125,14 @@ impl Default for EventsConfig {
     fn default() -> Self {
         Self {
             retention: default_event_retention(),
+        }
+    }
+}
+
+impl Default for PredictionConfig {
+    fn default() -> Self {
+        Self {
+            policy: default_prediction_policy(),
         }
     }
 }
@@ -174,6 +194,7 @@ impl AppConfig {
             "llm.model" => Some(self.llm.model.clone()),
             "llm.prompt" => Some(self.llm.prompt.clone()),
             "events.retention" => Some(self.events.retention.to_string()),
+            "prediction.policy" => Some(self.prediction.policy.clone()),
             "privacy.excluded_literals" => Some(format!(
                 "[{}]",
                 vec!["<redacted>"; self.privacy.excluded_literals.len()].join(", ")
@@ -236,6 +257,14 @@ impl AppConfig {
                 }
                 self.events.retention = retention;
             }
+            "prediction.policy" => {
+                if !matches!(value, "v0.4-baseline" | "contextual") {
+                    return Err(
+                        "Invalid prediction policy. Valid: v0.4-baseline, contextual".to_string(),
+                    );
+                }
+                self.prediction.policy = value.to_string();
+            }
             "privacy.excluded_literals" => {
                 self.privacy.excluded_literals = parse_list(value);
             }
@@ -289,5 +318,10 @@ mod tests {
         assert!(config.set_value("update.channel", "pip").is_ok());
         assert!(config.set_value("update.channel", "aur").is_err());
         assert!(config.set_value("update.channel", "binary").is_err());
+    }
+
+    #[test]
+    fn contextual_policy_is_the_default_after_passing_the_promotion_gate() {
+        assert_eq!(AppConfig::default().prediction.policy, "contextual");
     }
 }

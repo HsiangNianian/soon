@@ -35,10 +35,14 @@ case " \$* " in
   *' events record-command '*|*' events record-suggestion '*) exit 0 ;;
 esac
 sleep 0.05
+prefix=''
 case " \$* " in
-  *' --exit-code 0 '*) printf '%s\n' 'touch $accepted_file' ;;
-  *' --exit-code '*) printf '%s\n' 'touch $repair_file' ;;
-  *) printf '%s\n' 'touch $accepted_file' ;;
+  *' --include-source '*) prefix="deterministic-history	" ;;
+esac
+case " \$* " in
+  *' --exit-code 0 '*) printf '%b%s\n' "\$prefix" 'touch $accepted_file' ;;
+  *' --exit-code '*) printf '%b%s\n' "\$prefix" 'touch $repair_file' ;;
+  *) printf '%b%s\n' "\$prefix" 'touch $accepted_file' ;;
 esac
 FAKE_SOON
 chmod +x $fake_bin/soon
@@ -128,12 +132,15 @@ function wait_for_log() {
 wait_for_output 'SOON_PROMPT> '
 wait_for_output "touch $accepted_file"
 wait_for_log '--outcome shown'
+wait_for_log '--candidate-source deterministic-history'
 zpty -w -n soon_shell $'\x06'
 wait_for_log '--outcome accepted'
+wait_for_log "--candidate-source deterministic-history --command touch $accepted_file --outcome accepted"
 sleep 0.05
 zpty -w -n soon_shell $'\n'
 wait_for_file $accepted_file
 wait_for_log '--outcome executed'
+wait_for_log "--candidate-source deterministic-history --command touch $accepted_file --outcome executed"
 wait_for_output 'SOON_PROMPT> '
 
 # Normal typing ignores the ghost suggestion instead of modifying the buffer.

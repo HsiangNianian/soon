@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use crate::config::AppConfig;
-use crate::predict::{is_ignored_command, main_cmd};
+use crate::prediction::{self, Memory};
 use crate::privacy;
 
 pub const SCHEMA_VERSION: u8 = 1;
@@ -16,6 +16,10 @@ pub struct CommandEvent {
     pub id: String,
     pub command: String,
     pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
     pub started_at_ms: Option<i64>,
     pub duration_ms: Option<u64>,
     pub exit_code: Option<i32>,
@@ -84,14 +88,6 @@ impl SuggestionOutcome {
             _ => Err(format!("Unknown suggestion outcome: {value}")),
         }
     }
-}
-
-#[derive(Debug, Default)]
-struct CandidateScore {
-    result_matches: usize,
-    evidence: usize,
-    directory_matches: usize,
-    latest_index: usize,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -181,7 +177,49 @@ fn validate_command(event: &CommandEvent, config: &AppConfig) -> Result<(), Stri
     if let Some(reason) = privacy::rejection_reason(&event.command, config) {
         return Err(format!("Refusing to store sensitive command: {reason}"));
     }
+    if event
+        .repository
+        .iter()
+        .chain(event.branch.iter())
+        .any(|value| value.chars().any(char::is_control))
+    {
+        return Err("Refusing to store repository context with control characters".to_string());
+    }
     Ok(())
+}
+
+pub fn discover_git_context(cwd: &str) -> (Option<String>, Option<String>) {
+    let mut directory = std::path::Path::new(cwd).canonicalize().ok();
+    while let Some(current) = directory {
+        let dot_git = current.join(".git");
+        if dot_git.exists() {
+            let git_dir = if dot_git.is_dir() {
+                dot_git
+            } else {
+                let contents = fs::read_to_string(&dot_git).ok();
+                let path = contents
+                    .as_deref()
+                    .and_then(|value| value.trim().strip_prefix("gitdir:"))
+                    .map(str::trim)
+                    .map(std::path::PathBuf::from);
+                match path {
+                    Some(path) if path.is_absolute() => path,
+                    Some(path) => current.join(path),
+                    None => return (None, None),
+                }
+            };
+            let branch = fs::read_to_string(git_dir.join("HEAD"))
+                .ok()
+                .and_then(|head| {
+                    head.trim()
+                        .strip_prefix("ref: refs/heads/")
+                        .map(str::to_string)
+                });
+            return (Some(current.to_string_lossy().into_owned()), branch);
+        }
+        directory = current.parent().map(std::path::Path::to_path_buf);
+    }
+    (None, None)
 }
 
 pub fn record_suggestion(event: SuggestionEvent, config: &AppConfig) -> Result<(), String> {
@@ -257,60 +295,44 @@ pub fn clear() -> Result<(), String> {
 pub fn predict_after(
     command: &str,
     exit_code: i32,
+    event_id: Option<&str>,
     cwd: Option<&str>,
     config: &AppConfig,
-) -> Option<String> {
-    let events = load_command_events();
-    let mut candidates = std::collections::HashMap::<String, CandidateScore>::new();
-    let successors: std::collections::HashMap<&str, &CommandEvent> = events
-        .iter()
-        .filter_map(|event| {
-            event
-                .previous_event_id
-                .as_deref()
-                .map(|previous_id| (previous_id, event))
-        })
-        .collect();
-    let wanted_success = exit_code == 0;
-
-    for (index, event) in events.iter().enumerate() {
-        if event.command.trim() != command.trim()
-            || event
-                .exit_code
-                .is_some_and(|code| (code == 0) != wanted_success)
-        {
-            continue;
-        }
-
-        let Some(next) = successors.get(event.id.as_str()) else {
-            continue;
-        };
-        if next.command.chars().any(char::is_control)
-            || privacy::rejection_reason(&next.command, config).is_some()
-            || is_ignored_command(main_cmd(&next.command), config)
-        {
-            continue;
-        }
-
-        let score = candidates.entry(next.command.clone()).or_default();
-        score.result_matches += usize::from(event.exit_code.is_some());
-        score.evidence += 1;
-        score.directory_matches +=
-            usize::from(cwd.is_some_and(|cwd| Some(cwd) == event.cwd.as_deref()));
-        score.latest_index = index;
-    }
-
-    let mut ranked: Vec<_> = candidates.into_iter().collect();
-    ranked.sort_by(|(command_a, score_a), (command_b, score_b)| {
-        score_b
-            .result_matches
-            .cmp(&score_a.result_matches)
-            .then_with(|| score_b.directory_matches.cmp(&score_a.directory_matches))
-            .then_with(|| score_b.evidence.cmp(&score_a.evidence))
-            .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
-            .then_with(|| command_a.cmp(command_b))
+) -> Option<prediction::Prediction> {
+    let events = load_stored_events(&event_store_path());
+    let memory = Memory::from_stored(&events);
+    let stored_current = event_id.and_then(|event_id| {
+        memory
+            .commands
+            .iter()
+            .copied()
+            .find(|event| event.id == event_id && event.command.trim() == command.trim())
     });
-    ranked.into_iter().next().map(|(command, _)| command)
+    let (repository, branch) = if stored_current.is_none() {
+        cwd.map(discover_git_context).unwrap_or((None, None))
+    } else {
+        (None, None)
+    };
+    let synthetic_current = CommandEvent {
+        schema_version: SCHEMA_VERSION,
+        id: String::new(),
+        command: command.to_string(),
+        cwd: cwd.map(str::to_string),
+        repository,
+        branch,
+        started_at_ms: None,
+        duration_ms: None,
+        exit_code: Some(exit_code),
+        shell: String::new(),
+        previous_event_id: None,
+    };
+    let current = stored_current.unwrap_or(&synthetic_current);
+    prediction::predict(
+        prediction::configured_policy(config),
+        current,
+        &memory,
+        config,
+    )
 }
 
 fn load_command_events() -> Vec<CommandEvent> {

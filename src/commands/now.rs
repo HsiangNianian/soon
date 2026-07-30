@@ -12,7 +12,9 @@ use crate::shell::{self, HistoryItem, ShellKind};
 pub struct InvocationContext<'a> {
     pub after: Option<&'a str>,
     pub exit_code: Option<i32>,
+    pub event_id: Option<&'a str>,
     pub cwd: Option<&'a str>,
+    pub include_source: bool,
 }
 
 pub fn run(
@@ -25,9 +27,20 @@ pub fn run(
 ) {
     if raw {
         if let (Some(command), Some(exit_code)) = (context.after, context.exit_code) {
-            if let Some(suggestion) = events::predict_after(command, exit_code, context.cwd, config)
+            if let Some(suggestion) =
+                events::predict_after(command, exit_code, context.event_id, context.cwd, config)
             {
-                print_raw_suggestion(Some(suggestion));
+                if debug {
+                    eprintln!("Prediction details:");
+                    eprintln!("  Policy: {}", suggestion.policy.label());
+                    eprintln!("  Candidate source: {}", suggestion.candidate_source);
+                    eprintln!("  Signal groups: {}", suggestion.signal_groups.join(", "));
+                }
+                print_raw_suggestion(
+                    Some(suggestion.command),
+                    suggestion.policy.event_source(),
+                    context.include_source,
+                );
                 return;
             }
         }
@@ -52,7 +65,7 @@ pub fn run(
         predict::predict_next_command(&history, ngram, &cache_cmds, config, debug && !raw);
 
     if raw {
-        print_raw_suggestion(suggestion);
+        print_raw_suggestion(suggestion, "deterministic-history", context.include_source);
         return;
     }
 
@@ -113,9 +126,13 @@ pub fn run(
     }
 }
 
-fn print_raw_suggestion(suggestion: Option<String>) {
+fn print_raw_suggestion(suggestion: Option<String>, source: &str, include_source: bool) {
     if let Some(cmd) = suggestion.filter(|cmd| !cmd.chars().any(char::is_control)) {
-        println!("{cmd}");
+        if include_source {
+            println!("{source}\t{cmd}");
+        } else {
+            println!("{cmd}");
+        }
     }
 }
 

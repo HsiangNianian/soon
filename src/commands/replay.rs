@@ -1,4 +1,5 @@
 use crate::config::AppConfig;
+use crate::prediction::PolicyKind;
 use crate::replay::{self, Metrics, Trigger};
 
 pub fn run(config: &AppConfig) {
@@ -33,6 +34,22 @@ pub fn run(config: &AppConfig) {
         );
     }
     println!();
+    println!("Policy comparison:");
+    print_policy(PolicyKind::V04Baseline, &report.baseline);
+    print_policy(PolicyKind::Contextual, &report.contextual);
+    println!(
+        "Contextual promotion gate: {} (requires top-1 > baseline and p95 <= 20 ms)",
+        if report.contextual_promotion_passes() {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    println!(
+        "Configured policy: {}",
+        crate::prediction::configured_policy(config).label()
+    );
+    println!();
     println!("Model outcomes:");
     println!("  Attempts: {}", report.model.attempts);
     println!(
@@ -65,6 +82,18 @@ pub fn run(config: &AppConfig) {
         replay::ZSH_P95_BUDGET_MS
     );
     println!("Privacy: aggregate metrics only; no command text printed or uploaded.");
+}
+
+fn print_policy(policy: PolicyKind, metrics: &Metrics) {
+    println!(
+        "  {:<21} samples={} coverage={:.1}% top-1={:.1}% p50={:.3}ms p95={:.3}ms",
+        policy.label(),
+        metrics.samples,
+        metrics.coverage_percent(),
+        metrics.top1_percent(),
+        metrics.p50_ms(),
+        metrics.p95_ms()
+    );
 }
 
 fn print_summary(metrics: &Metrics) {
