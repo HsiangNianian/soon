@@ -11,11 +11,11 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 [![CI](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml/badge.svg)](https://github.com/HsiangNianian/soon/actions/workflows/proof-pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Website](https://soon.hydroroll.team) · [v0.4.2 Zsh parser patch](https://github.com/HsiangNianian/soon/releases/tag/v0.4.2) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
+[Website](https://soon.hydroroll.team) · [v0.5.0 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/releases/tag/v0.5.0) · [Roadmap](https://github.com/users/HsiangNianian/projects/7)
 
 </div>
 
-> **Beta status:** v0.4.2 ships the opt-in Zsh ghost-suggestion loop, a privacy-safe adoption report, and correct handling for compound commands in Zsh history. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
+> **Beta status:** v0.5.0 ships the opt-in Zsh ghost-suggestion loop, the measured contextual policy as the local default, and optional model-backed Rerank, Repair, and explicit Generate paths. Interactive integration is supported on native Linux and macOS; other shells and packaged platforms remain experimental unless listed in the [release contract](RELEASING.md).
 
 <a href="https://soon.hydroroll.team">
   <img src="www/assets/soon-demo.svg" alt="An 18-second terminal demo: a failed Git command triggers a local Repair suggestion, Ctrl-F accepts it into the editable buffer, and the user decides when to execute it.">
@@ -23,7 +23,7 @@ A local-first terminal agent that predicts, repairs, and suggests your next full
 
 ## Try the beta
 
-Install the same v0.4.2 release through Cargo or PyPI:
+Install the same v0.5.0 release through Cargo or PyPI:
 
 ```bash
 cargo install soon
@@ -40,7 +40,7 @@ At an empty prompt, soon computes in the background and renders one dim full-com
 
 The default prediction path uses local history, not a model or network service. It can choose a Next-step suggestion after success, a Repair suggestion after failure, or predict on demand when you run `soon`.
 
-> **v0.5 development:** the source tree defaults to the local contextual policy after it passed the replay promotion gate. The published v0.4.2 package still uses the deterministic baseline.
+The v0.5.0 package defaults to the local contextual policy after it passed the replay promotion gate. Model-backed candidates remain disabled unless explicitly configured or requested with `soon generate`.
 
 ## The idea
 
@@ -124,7 +124,7 @@ soon --shell zsh
 
 The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and tcsh history. Parsing a format does not mean interactive integration for that shell is complete.
 
-## What v0.4 ships
+## What v0.5 ships
 
 | Shipped surface | Release evidence |
 |---|---|
@@ -132,6 +132,7 @@ The current source can parse Bash, Zsh, Fish, Nushell, Elvish, PowerShell, and t
 | Manual, successful-command Next-step, and failed-command Repair triggers | Native Linux and macOS lifecycle regression coverage |
 | Retained events plus chronological quality and latency replay | Deterministic fixture with a 20 ms Zsh p95 budget |
 | Sensitive-command filters plus idempotent Zsh history import | Documented privacy behavior and aggregate-only inspection |
+| Contextual ranking plus opt-in model candidate sources | Baseline comparison, mock providers, and a documented 0.5B evaluation |
 
 The implementation plan lives in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). Work is tracked in the public [Personal Terminal Agent Project](https://github.com/users/HsiangNianian/projects/7).
 
@@ -145,7 +146,7 @@ Optional local and OpenAI-compatible sources can rerank safe history candidates,
 
 The [small local model gate](docs/model-evaluation.md) tested Qwen2.5-Coder 0.5B Q4_K_M on an Intel Mac. It added one exact cold-start Repair across eight public fixtures at 676.2 ms p95, which was enough to validate the optional path but not enough quality evidence to enable it by default.
 
-The v0.5 source promotes contextual after it improved exact top-1 without reducing coverage or exceeding the 20 ms p95 budget in both the deterministic fixture and a local aggregate replay. `v0.4-baseline` remains an explicit offline fallback.
+The v0.5.0 release promotes contextual after it improved exact top-1 without reducing coverage or exceeding the 20 ms p95 budget in both the deterministic fixture and a local aggregate replay. `v0.4-baseline` remains an explicit offline fallback.
 
 ## Agent roadmap
 
@@ -153,7 +154,7 @@ The [v0.4 Local Agent MVP](https://github.com/HsiangNianian/soon/milestone/1) co
 
 The closed [v0.4.1 Adoption Sprint](https://github.com/HsiangNianian/soon/milestone/3) added the public demo, launch assets, and privacy-safe report. The planned ten-user pilot and final timed launch measurements were explicitly closed as not planned rather than reported as completed.
 
-The [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) promotes the contextual probabilistic ranker from [#16](https://github.com/HsiangNianian/soon/issues/16) and adds the opt-in local-model/OpenAI-compatible layer from [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
+The completed [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) promotes the contextual probabilistic ranker from [#16](https://github.com/HsiangNianian/soon/issues/16) and adds the opt-in local-model/OpenAI-compatible layer from [#17](https://github.com/HsiangNianian/soon/issues/17). Model output is never required for the default hot path.
 
 ## Privacy
 
@@ -290,7 +291,7 @@ soon update             Check the configured release channel
 
 ## Contributing
 
-Start with [RFC #4](https://github.com/HsiangNianian/soon/issues/4), then choose an open issue from the [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2). The contextual ranker is tracked in [#16](https://github.com/HsiangNianian/soon/issues/16), and the opt-in model candidate layer is tracked in [#17](https://github.com/HsiangNianian/soon/issues/17).
+The accepted direction is recorded in [RFC #4](https://github.com/HsiangNianian/soon/issues/4). The completed [v0.5 Hybrid Prediction Engine](https://github.com/HsiangNianian/soon/milestone/2) delivered the contextual ranker in [#16](https://github.com/HsiangNianian/soon/issues/16) and the opt-in model candidate layer in [#17](https://github.com/HsiangNianian/soon/issues/17).
 
 For local verification:
 
