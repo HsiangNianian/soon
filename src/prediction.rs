@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
 use crate::config::AppConfig;
-use crate::events::{CommandEvent, SuggestionEvent, SuggestionOutcome};
+use crate::events::{CommandEvent, StoredEvent, SuggestionEvent, SuggestionOutcome};
 use crate::predict::{is_ignored_command, main_cmd};
 use crate::privacy;
 
@@ -37,9 +37,27 @@ pub struct Prediction {
     pub signal_groups: Vec<&'static str>,
 }
 
+#[derive(Default)]
 pub struct Memory<'a> {
-    pub commands: &'a [&'a CommandEvent],
-    pub suggestions: &'a [&'a SuggestionEvent],
+    pub commands: Vec<&'a CommandEvent>,
+    pub suggestions: Vec<&'a SuggestionEvent>,
+}
+
+impl<'a> Memory<'a> {
+    pub(crate) fn from_stored(events: &'a [StoredEvent]) -> Self {
+        let mut memory = Self::default();
+        for event in events {
+            memory.push(event);
+        }
+        memory
+    }
+
+    pub(crate) fn push(&mut self, event: &'a StoredEvent) {
+        match event {
+            StoredEvent::Command(command) => self.commands.push(command),
+            StoredEvent::Suggestion(suggestion) => self.suggestions.push(suggestion),
+        }
+    }
 }
 
 struct Candidate<'a> {
@@ -185,33 +203,35 @@ impl Ranker for V04Ranker {
                 .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
                 .then_with(|| candidate_a.command.cmp(candidate_b.command))
         });
-        ranked.into_iter().next().map(|(candidate, _)| {
-            let mut signal_groups = Vec::new();
-            if candidate.observations.iter().any(|observation| {
-                observation
-                    .previous
-                    .is_some_and(|event| event.exit_code.is_some())
-            }) {
-                signal_groups.push("result");
-            }
-            if current.cwd.is_some()
-                && candidate.observations.iter().any(|observation| {
-                    observation
-                        .previous
-                        .is_some_and(|event| event.cwd.is_some())
-                })
-            {
-                signal_groups.push("directory");
-            }
-            signal_groups.extend(["frequency", "recency"]);
-            Prediction {
-                command: candidate.command.to_string(),
-                policy: PolicyKind::V04Baseline,
-                candidate_source: candidate.source,
-                signal_groups,
-            }
+        ranked.into_iter().next().map(|(candidate, _)| Prediction {
+            command: candidate.command.to_string(),
+            policy: PolicyKind::V04Baseline,
+            candidate_source: candidate.source,
+            signal_groups: v04_signal_groups(current, &candidate),
         })
     }
+}
+
+fn v04_signal_groups(current: &CommandEvent, candidate: &Candidate<'_>) -> Vec<&'static str> {
+    let mut groups = Vec::new();
+    if candidate.observations.iter().any(|observation| {
+        observation
+            .previous
+            .is_some_and(|event| event.exit_code.is_some())
+    }) {
+        groups.push("result");
+    }
+    if current.cwd.is_some()
+        && candidate.observations.iter().any(|observation| {
+            observation
+                .previous
+                .is_some_and(|event| event.cwd.is_some())
+        })
+    {
+        groups.push("directory");
+    }
+    groups.extend(["frequency", "recency"]);
+    groups
 }
 
 struct FullHistorySource;
@@ -478,73 +498,82 @@ impl Ranker for ContextualRanker {
                 .then_with(|| score_b.latest_index.cmp(&score_a.latest_index))
                 .then_with(|| candidate_a.command.cmp(candidate_b.command))
         });
-        ranked.into_iter().next().map(|(candidate, score)| {
-            let mut signal_groups = Vec::new();
-            if score.first_order_matches > 0 || score.second_order_matches > 0 {
-                signal_groups.push("transition");
-            }
-            if current.cwd.is_some()
-                && candidate
-                    .observations
-                    .iter()
-                    .any(|observation| observation.event.cwd.is_some())
-            {
-                signal_groups.push("directory");
-            }
-            if current.repository.is_some()
-                && candidate
-                    .observations
-                    .iter()
-                    .any(|observation| observation.event.repository.is_some())
-            {
-                signal_groups.push("repository");
-            }
-            if current.branch.is_some()
-                && candidate
-                    .observations
-                    .iter()
-                    .any(|observation| observation.event.branch.is_some())
-            {
-                signal_groups.push("branch");
-            }
-            if current.started_at_ms.is_some()
-                && candidate
-                    .observations
-                    .iter()
-                    .any(|observation| observation.event.started_at_ms.is_some())
-            {
-                signal_groups.push("time");
-            }
-            if current.exit_code.is_some()
-                && candidate.observations.iter().any(|observation| {
-                    observation
-                        .previous
-                        .is_some_and(|event| event.exit_code.is_some())
-                })
-            {
-                signal_groups.push("result");
-            }
-            if current.duration_ms.is_some()
-                && candidate.observations.iter().any(|observation| {
-                    observation
-                        .previous
-                        .is_some_and(|event| event.duration_ms.is_some())
-                })
-            {
-                signal_groups.push("duration");
-            }
-            if score.feedback > 0 {
-                signal_groups.push("feedback");
-            }
-            signal_groups.extend(["frequency", "recency"]);
-            Prediction {
+        ranked
+            .into_iter()
+            .next()
+            .map(|(candidate, score)| Prediction {
                 command: candidate.command.to_string(),
                 policy: PolicyKind::Contextual,
                 candidate_source: candidate.source,
-                signal_groups,
-            }
-        })
+                signal_groups: contextual_signal_groups(current, &candidate, &score),
+            })
     }
+}
+
+fn contextual_signal_groups(
+    current: &CommandEvent,
+    candidate: &Candidate<'_>,
+    score: &ContextualScore,
+) -> Vec<&'static str> {
+    let mut groups = Vec::new();
+    if score.first_order_matches > 0 || score.second_order_matches > 0 {
+        groups.push("transition");
+    }
+    if current.cwd.is_some()
+        && candidate
+            .observations
+            .iter()
+            .any(|observation| observation.event.cwd.is_some())
+    {
+        groups.push("directory");
+    }
+    if current.repository.is_some()
+        && candidate
+            .observations
+            .iter()
+            .any(|observation| observation.event.repository.is_some())
+    {
+        groups.push("repository");
+    }
+    if current.branch.is_some()
+        && candidate
+            .observations
+            .iter()
+            .any(|observation| observation.event.branch.is_some())
+    {
+        groups.push("branch");
+    }
+    if current.started_at_ms.is_some()
+        && candidate
+            .observations
+            .iter()
+            .any(|observation| observation.event.started_at_ms.is_some())
+    {
+        groups.push("time");
+    }
+    if current.exit_code.is_some()
+        && candidate.observations.iter().any(|observation| {
+            observation
+                .previous
+                .is_some_and(|event| event.exit_code.is_some())
+        })
+    {
+        groups.push("result");
+    }
+    if current.duration_ms.is_some()
+        && candidate.observations.iter().any(|observation| {
+            observation
+                .previous
+                .is_some_and(|event| event.duration_ms.is_some())
+        })
+    {
+        groups.push("duration");
+    }
+    if score.feedback > 0 {
+        groups.push("feedback");
+    }
+    groups.extend(["frequency", "recency"]);
+    groups
 }
 
 fn hour_bucket(timestamp_ms: i64) -> Option<u32> {

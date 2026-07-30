@@ -300,22 +300,10 @@ pub fn predict_after(
     config: &AppConfig,
 ) -> Option<prediction::Prediction> {
     let events = load_stored_events(&event_store_path());
-    let commands: Vec<_> = events
-        .iter()
-        .filter_map(|event| match event {
-            StoredEvent::Command(command) => Some(command),
-            StoredEvent::Suggestion(_) => None,
-        })
-        .collect();
-    let suggestions: Vec<_> = events
-        .iter()
-        .filter_map(|event| match event {
-            StoredEvent::Command(_) => None,
-            StoredEvent::Suggestion(suggestion) => Some(suggestion),
-        })
-        .collect();
+    let memory = Memory::from_stored(&events);
     let stored_current = event_id.and_then(|event_id| {
-        commands
+        memory
+            .commands
             .iter()
             .copied()
             .find(|event| event.id == event_id && event.command.trim() == command.trim())
@@ -342,10 +330,7 @@ pub fn predict_after(
     prediction::predict(
         prediction::configured_policy(config),
         current,
-        &Memory {
-            commands: &commands,
-            suggestions: &suggestions,
-        },
+        &memory,
         config,
     )
 }

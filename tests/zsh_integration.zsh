@@ -135,10 +135,12 @@ wait_for_log '--outcome shown'
 wait_for_log '--candidate-source deterministic-history'
 zpty -w -n soon_shell $'\x06'
 wait_for_log '--outcome accepted'
+wait_for_log "--candidate-source deterministic-history --command touch $accepted_file --outcome accepted"
 sleep 0.05
 zpty -w -n soon_shell $'\n'
 wait_for_file $accepted_file
 wait_for_log '--outcome executed'
+wait_for_log "--candidate-source deterministic-history --command touch $accepted_file --outcome executed"
 wait_for_output 'SOON_PROMPT> '
 
 # Normal typing ignores the ghost suggestion instead of modifying the buffer.

@@ -144,8 +144,7 @@ struct RecordedSuggestion<'a> {
 pub fn run(config: &AppConfig) -> ReplayReport {
     let stored_events = events::replay_events();
     let mut seen = HashMap::<&str, &CommandEvent>::new();
-    let mut commands = Vec::<&CommandEvent>::new();
-    let mut suggestions = Vec::<&SuggestionEvent>::new();
+    let mut memory = Memory::default();
     let mut pending = HashMap::<&str, Vec<RecordedSuggestion<'_>>>::new();
     let mut pending_manual = Vec::<RecordedSuggestion<'_>>::new();
     let mut report = ReplayReport::default();
@@ -162,10 +161,6 @@ pub fn run(config: &AppConfig) -> ReplayReport {
                 if let Some(previous_id) = command.previous_event_id.as_deref() {
                     if let Some(previous) = seen.get(previous_id).copied() {
                         if is_candidate(&command.command, config) {
-                            let memory = Memory {
-                                commands: &commands,
-                                suggestions: &suggestions,
-                            };
                             let started = Instant::now();
                             let baseline = prediction::predict(
                                 PolicyKind::V04Baseline,
@@ -233,7 +228,7 @@ pub fn run(config: &AppConfig) -> ReplayReport {
                     }
                 }
                 seen.insert(command.id.as_str(), command);
-                commands.push(command);
+                memory.push(stored_event);
             }
             StoredEvent::Suggestion(suggestion) if is_safe_suggestion(suggestion, config) => {
                 if suggestion.outcome == SuggestionOutcome::Shown {
@@ -247,7 +242,7 @@ pub fn run(config: &AppConfig) -> ReplayReport {
                         pending_manual.push(recorded);
                     }
                 }
-                suggestions.push(suggestion);
+                memory.push(stored_event);
             }
             StoredEvent::Command(_) | StoredEvent::Suggestion(_) => {}
         }
