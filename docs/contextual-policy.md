@@ -1,13 +1,13 @@
 # Contextual prediction policy
 
-The contextual policy is the local-only default in the v0.5 development source after passing the replay promotion gate. Switch between it and the v0.4 fallback with:
+The contextual policy is the local-only default in v0.5.0 after passing the replay promotion gate. Switch between it and the v0.4 fallback with:
 
 ```bash
 soon config set prediction.policy contextual
 soon config set prediction.policy v0.4-baseline
 ```
 
-The published v0.4.2 package still defaults to `v0.4-baseline`. Run `soon replay` after installing a v0.5 build; it evaluates both policies on the same chronological prefixes without exposing command text.
+Run `soon replay` after installing v0.5.0; it evaluates the contextual default and `v0.4-baseline` on the same chronological prefixes without exposing command text.
 
 ## Boundaries
 

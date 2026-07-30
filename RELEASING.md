@@ -1,10 +1,10 @@
 # Releasing soon
 
-## v0.4 beta support contract
+## v0.5 beta support contract
 
 The interactive beta is supported on Zsh on native Linux and macOS runners. The on-demand CLI and Python wheels are built for the targets listed in `.github/workflows/release.yml`, but shell parsers other than Zsh do not yet imply supported interactive integration.
 
-| Channel | v0.4 beta status | Update source |
+| Channel | v0.5 beta status | Update source |
 |---|---|---|
 | Cargo package `soon` | Supported | crates.io package metadata |
 | PyPI package `soon-bin` | Supported | PyPI package metadata |

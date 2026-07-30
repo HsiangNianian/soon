@@ -4,6 +4,13 @@ All notable changes to soon are documented here.
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-31
+
+soon 0.5.0 makes the measured contextual policy the local default and adds an
+optional model-backed candidate layer without putting inference or network
+access on the ordinary prediction path. Suggestions remain editable text and
+are never executed automatically.
+
 ### Added
 
 - Added a contextual full-command ranker with separate candidate-source
@@ -17,6 +24,8 @@ All notable changes to soon are documented here.
   filtered, model output is treated as untrusted, deadlines fall back to the
   deterministic policy, and Zsh/replay retain source and outcome attribution
   ([#17](https://github.com/HsiangNianian/soon/issues/17)).
+
+[Full diff](https://github.com/HsiangNianian/soon/compare/v0.4.2...v0.5.0)
 
 ## 0.4.2 - 2026-07-29
 

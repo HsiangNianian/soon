@@ -22,8 +22,8 @@ impl std::fmt::Display for InstallChannel {
         match self {
             InstallChannel::Cargo => write!(f, "cargo"),
             InstallChannel::Pip => write!(f, "pip"),
-            InstallChannel::Aur => write!(f, "AUR (unsupported for v0.4 beta)"),
-            InstallChannel::Binary => write!(f, "standalone binary (unsupported for v0.4 beta)"),
+            InstallChannel::Aur => write!(f, "AUR (unsupported beta channel)"),
+            InstallChannel::Binary => write!(f, "standalone binary (unsupported beta channel)"),
             InstallChannel::Unknown => write!(f, "unknown"),
         }
     }
@@ -65,7 +65,7 @@ fn latest_version(channel: &InstallChannel) -> Result<String, String> {
         InstallChannel::Pip => PYPI_API,
         InstallChannel::Aur | InstallChannel::Binary => {
             return Err(format!(
-                "{channel} is not a supported v0.4 beta channel; use cargo install soon or pip install soon-bin"
+                "{channel} is not a supported beta channel; use cargo install soon or pip install soon-bin"
             ));
         }
         InstallChannel::Unknown => {
@@ -138,7 +138,7 @@ fn do_update(channel: &InstallChannel) -> Result<(), String> {
         }
         InstallChannel::Aur | InstallChannel::Binary => {
             return Err(format!(
-                "{channel} is not a supported v0.4 beta channel; no update was attempted"
+                "{channel} is not a supported beta channel; no update was attempted"
             ));
         }
         InstallChannel::Unknown => {
@@ -258,8 +258,8 @@ mod tests {
     #[test]
     fn unsupported_channels_have_no_release_lookup() {
         let error = latest_version(&InstallChannel::Aur).expect_err("AUR must stay disabled");
-        assert!(error.contains("not a supported v0.4 beta channel"));
+        assert!(error.contains("not a supported beta channel"));
         let error = latest_version(&InstallChannel::Binary).expect_err("binary must stay disabled");
-        assert!(error.contains("not a supported v0.4 beta channel"));
+        assert!(error.contains("not a supported beta channel"));
     }
 }
